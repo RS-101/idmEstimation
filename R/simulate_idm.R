@@ -234,7 +234,7 @@ add_interval_censoring_to_illness <- function(dt, obs_interval = 1, obs_time_sd 
   #  T_obs[status == 1] <- V_healthy[status == 1]
 
   # Return
-  obs_dt <- data.table::data.table(
+  obs_dt <- data.frame(
     V_0 = V_0,
     V_healthy = V_healthy,
     V_ill = V_ill,
@@ -249,7 +249,7 @@ add_interval_censoring_to_illness <- function(dt, obs_interval = 1, obs_time_sd 
 
   # Store the (possibly wide) schedule as a list-column to avoid unintended column expansion
   schedule_list <- split(obs_schedule, row(obs_schedule))
-  true_dt <- data.table::data.table(
+  true_dt <- data.frame(
     obs_schedule = schedule_list,
     time_to_censor = time_to_censor,
     time_to_illness = time_to_illness,
@@ -357,7 +357,7 @@ add_interval_censoring_to_illness_extension <- function(
   status[!is.na(V_ill) &  died_by_end] <- 4L
 
   # ---- Outputs
-  obs_dt <- data.table::data.table(
+  obs_dt <- data.frame(
     V_0 = V_0,
     V_healthy = V_healthy,
     V_ill = V_ill,
@@ -375,7 +375,7 @@ add_interval_censoring_to_illness_extension <- function(
   schedule_list <- split(obs_schedule, row(obs_schedule))
   missing_list  <- split(missing_status, row(missing_status))
 
-  true_dt <- data.table::data.table(
+  true_dt <- data.frame(
     scenario = scenario,
     obs_schedule = schedule_list,
     missing_status = missing_list,

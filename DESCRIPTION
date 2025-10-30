@@ -15,10 +15,13 @@ License: What license is it under?
 Encoding: UTF-8
 LazyData: true
 Imports: 
+    splines2,
     data.table,
     ggplot2,
     patchwork,
     Rcpp (>= 1.1.0)
 LinkingTo: 
     Rcpp,
-    RcppArmadillo
+    RcppArmadillo,
+    RcppEigen,
+    RcppNumerical

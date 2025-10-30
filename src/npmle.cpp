@@ -216,7 +216,6 @@ SEXP make_model_data(List x) {
 }
 
 
-
 // ---------- workspace + helpers ----------
 struct Workspace {
   // parameters updated by EM

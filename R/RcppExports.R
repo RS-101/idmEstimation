@@ -9,3 +9,11 @@ em_fit <- function(md_ptr, z_init = NULL, lambda_init = NULL, max_iter = 100L, t
     .Call(`_idmEstimation_em_fit`, md_ptr, z_init, lambda_init, max_iter, tol, verbose)
 }
 
+create_penlik_model_data <- function(x) {
+    .Call(`_idmEstimation_create_penlik_model_data`, x)
+}
+
+calc_case_1_log_likelihood <- function(md_ptr_case_1, theta_12, theta_13, theta_23) {
+    .Call(`_idmEstimation_calc_case_1_log_likelihood`, md_ptr_case_1, theta_12, theta_13, theta_23)
+}
+

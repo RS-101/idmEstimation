@@ -2,6 +2,7 @@
 // Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 #include <RcppArmadillo.h>
+#include <RcppEigen.h>
 #include <Rcpp.h>
 
 using namespace Rcpp;
@@ -38,10 +39,37 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// create_penlik_model_data
+SEXP create_penlik_model_data(List x);
+RcppExport SEXP _idmEstimation_create_penlik_model_data(SEXP xSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type x(xSEXP);
+    rcpp_result_gen = Rcpp::wrap(create_penlik_model_data(x));
+    return rcpp_result_gen;
+END_RCPP
+}
+// calc_case_1_log_likelihood
+double calc_case_1_log_likelihood(SEXP md_ptr_case_1, const arma::vec& theta_12, const arma::vec& theta_13, const arma::vec& theta_23);
+RcppExport SEXP _idmEstimation_calc_case_1_log_likelihood(SEXP md_ptr_case_1SEXP, SEXP theta_12SEXP, SEXP theta_13SEXP, SEXP theta_23SEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type md_ptr_case_1(md_ptr_case_1SEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type theta_12(theta_12SEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type theta_13(theta_13SEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type theta_23(theta_23SEXP);
+    rcpp_result_gen = Rcpp::wrap(calc_case_1_log_likelihood(md_ptr_case_1, theta_12, theta_13, theta_23));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_idmEstimation_make_model_data", (DL_FUNC) &_idmEstimation_make_model_data, 1},
     {"_idmEstimation_em_fit", (DL_FUNC) &_idmEstimation_em_fit, 6},
+    {"_idmEstimation_create_penlik_model_data", (DL_FUNC) &_idmEstimation_create_penlik_model_data, 1},
+    {"_idmEstimation_calc_case_1_log_likelihood", (DL_FUNC) &_idmEstimation_calc_case_1_log_likelihood, 4},
     {NULL, NULL, 0}
 };
 
