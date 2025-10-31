@@ -17,3 +17,15 @@ calc_case_1_log_likelihood <- function(md_ptr_case_1, theta_12, theta_13, theta_
     .Call(`_idmEstimation_calc_case_1_log_likelihood`, md_ptr_case_1, theta_12, theta_13, theta_23)
 }
 
+calc_case_2_log_likelihood <- function(md_ptr_case_2, theta_12, theta_13, theta_23) {
+    .Call(`_idmEstimation_calc_case_2_log_likelihood`, md_ptr_case_2, theta_12, theta_13, theta_23)
+}
+
+calc_case_3_log_likelihood <- function(md_ptr_case_3, theta_12, theta_13, theta_23) {
+    .Call(`_idmEstimation_calc_case_3_log_likelihood`, md_ptr_case_3, theta_12, theta_13, theta_23)
+}
+
+calc_case_4_log_likelihood <- function(md_ptr_case_4, theta_12, theta_13, theta_23) {
+    .Call(`_idmEstimation_calc_case_4_log_likelihood`, md_ptr_case_4, theta_12, theta_13, theta_23)
+}
+
