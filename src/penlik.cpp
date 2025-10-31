@@ -437,13 +437,154 @@ double calc_penlik_log_likelihood(
     return log_likelihood;
 }
 
+// Objective function class for LBFGS optimization
+class PenlikObjective : public Numer::MFuncGrad
+{
+private:
+    SEXP md_ptr_case_1;
+    SEXP md_ptr_case_2;
+    SEXP md_ptr_case_3;
+    SEXP md_ptr_case_4;
+    int n_theta_12;
+    int n_theta_13;
+    int n_theta_23;
+    
+public:
+    PenlikObjective(
+        SEXP md1, SEXP md2, SEXP md3, SEXP md4,
+        int n12, int n13, int n23
+    ) : md_ptr_case_1(md1), md_ptr_case_2(md2), 
+        md_ptr_case_3(md3), md_ptr_case_4(md4),
+        n_theta_12(n12), n_theta_13(n13), n_theta_23(n23) {}
+    
+    // Evaluate negative log-likelihood (we minimize, so negate)
+    double f_grad(Numer::Constvec& theta_all, Numer::Refvec grad) override
+    {
+        // Extract theta vectors for each transition (copy data, don't reference)
+        arma::vec theta_12(n_theta_12);
+        arma::vec theta_13(n_theta_13);
+        arma::vec theta_23(n_theta_23);
+        
+        for (int i = 0; i < n_theta_12; i++) {
+            theta_12(i) = theta_all(i);
+        }
+        for (int i = 0; i < n_theta_13; i++) {
+            theta_13(i) = theta_all(n_theta_12 + i);
+        }
+        for (int i = 0; i < n_theta_23; i++) {
+            theta_23(i) = theta_all(n_theta_12 + n_theta_13 + i);
+        }
+        
+        // Calculate log-likelihood
+        double log_lik = calc_penlik_log_likelihood(
+            md_ptr_case_1, md_ptr_case_2, md_ptr_case_3, md_ptr_case_4,
+            theta_12, theta_13, theta_23
+        );
+        
+        // Compute gradient using finite differences
+        const double epsilon = 1e-7;
+        int n_params = theta_all.size();
+        
+        for (int i = 0; i < n_params; i++) {
+            Eigen::VectorXd theta_plus = theta_all;
+            theta_plus(i) += epsilon;
+            
+            arma::vec theta_12_plus(n_theta_12);
+            arma::vec theta_13_plus(n_theta_13);
+            arma::vec theta_23_plus(n_theta_23);
+            
+            for (int j = 0; j < n_theta_12; j++) {
+                theta_12_plus(j) = theta_plus(j);
+            }
+            for (int j = 0; j < n_theta_13; j++) {
+                theta_13_plus(j) = theta_plus(n_theta_12 + j);
+            }
+            for (int j = 0; j < n_theta_23; j++) {
+                theta_23_plus(j) = theta_plus(n_theta_12 + n_theta_13 + j);
+            }
+            
+            double log_lik_plus = calc_penlik_log_likelihood(
+                md_ptr_case_1, md_ptr_case_2, md_ptr_case_3, md_ptr_case_4,
+                theta_12_plus, theta_13_plus, theta_23_plus
+            );
+            
+            // Gradient is negative because we return negative objective
+            grad(i) = -(log_lik_plus - log_lik) / epsilon;
+        }
+        
+        // Return negative because LBFGS minimizes
+        return -log_lik;
+    }
+};
 
 // [[Rcpp::export]]
-list optimize_penlik() {
-
-    Rcpp::Numerical::optim_lbfgs();
-
-
-
-
+List optimize_penlik(
+    SEXP md_ptr_case_1,
+    SEXP md_ptr_case_2,
+    SEXP md_ptr_case_3,
+    SEXP md_ptr_case_4,
+    const arma::vec& theta_12_init,
+    const arma::vec& theta_13_init,
+    const arma::vec& theta_23_init,
+    int max_iter = 1000,
+    double epsilon = 1e-6
+) {
+    // Get dimensions
+    int n_theta_12 = theta_12_init.n_elem;
+    int n_theta_13 = theta_13_init.n_elem;
+    int n_theta_23 = theta_23_init.n_elem;
+    int n_params = n_theta_12 + n_theta_13 + n_theta_23;
+    
+    // Combine initial parameters into single vector
+    Eigen::VectorXd theta_init(n_params);
+    for (int i = 0; i < n_theta_12; i++) {
+        theta_init(i) = theta_12_init(i);
+    }
+    for (int i = 0; i < n_theta_13; i++) {
+        theta_init(n_theta_12 + i) = theta_13_init(i);
+    }
+    for (int i = 0; i < n_theta_23; i++) {
+        theta_init(n_theta_12 + n_theta_13 + i) = theta_23_init(i);
+    }
+    
+    // Create objective function
+    PenlikObjective objective(
+        md_ptr_case_1, md_ptr_case_2, md_ptr_case_3, md_ptr_case_4,
+        n_theta_12, n_theta_13, n_theta_23
+    );
+    
+    // Set up LBFGS parameters
+    double fopt;
+    int status = Numer::optim_lbfgs(objective, theta_init, fopt, max_iter, epsilon);
+    
+    // Extract optimized parameters
+    arma::vec theta_12_opt(n_theta_12);
+    arma::vec theta_13_opt(n_theta_13);
+    arma::vec theta_23_opt(n_theta_23);
+    
+    for (int i = 0; i < n_theta_12; i++) {
+        theta_12_opt(i) = theta_init(i);
+    }
+    for (int i = 0; i < n_theta_13; i++) {
+        theta_13_opt(i) = theta_init(n_theta_12 + i);
+    }
+    for (int i = 0; i < n_theta_23; i++) {
+        theta_23_opt(i) = theta_init(n_theta_12 + n_theta_13 + i);
+    }
+    
+    // Calculate final log-likelihood
+    double final_log_lik = calc_penlik_log_likelihood(
+        md_ptr_case_1, md_ptr_case_2, md_ptr_case_3, md_ptr_case_4,
+        theta_12_opt, theta_13_opt, theta_23_opt
+    );
+    
+    // Return results
+    return List::create(
+        Named("theta_12") = theta_12_opt,
+        Named("theta_13") = theta_13_opt,
+        Named("theta_23") = theta_23_opt,
+        Named("log_likelihood") = final_log_lik,
+        Named("convergence") = status,
+        Named("iterations") = max_iter
+    );
 }

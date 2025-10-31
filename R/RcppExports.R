@@ -33,3 +33,7 @@ calc_penlik_log_likelihood <- function(md_ptr_case_1, md_ptr_case_2, md_ptr_case
     .Call(`_idmEstimation_calc_penlik_log_likelihood`, md_ptr_case_1, md_ptr_case_2, md_ptr_case_3, md_ptr_case_4, theta_12, theta_13, theta_23)
 }
 
+optimize_penlik <- function(md_ptr_case_1, md_ptr_case_2, md_ptr_case_3, md_ptr_case_4, theta_12_init, theta_13_init, theta_23_init, max_iter = 1000L, epsilon = 1e-6) {
+    .Call(`_idmEstimation_optimize_penlik`, md_ptr_case_1, md_ptr_case_2, md_ptr_case_3, md_ptr_case_4, theta_12_init, theta_13_init, theta_23_init, max_iter, epsilon)
+}
+
