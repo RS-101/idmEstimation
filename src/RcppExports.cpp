@@ -123,25 +123,6 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// optimize_penlik
-List optimize_penlik(SEXP md_ptr_case_1, SEXP md_ptr_case_2, SEXP md_ptr_case_3, SEXP md_ptr_case_4, const arma::vec& theta_12_init, const arma::vec& theta_13_init, const arma::vec& theta_23_init, int max_iter, double epsilon);
-RcppExport SEXP _idmEstimation_optimize_penlik(SEXP md_ptr_case_1SEXP, SEXP md_ptr_case_2SEXP, SEXP md_ptr_case_3SEXP, SEXP md_ptr_case_4SEXP, SEXP theta_12_initSEXP, SEXP theta_13_initSEXP, SEXP theta_23_initSEXP, SEXP max_iterSEXP, SEXP epsilonSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type md_ptr_case_1(md_ptr_case_1SEXP);
-    Rcpp::traits::input_parameter< SEXP >::type md_ptr_case_2(md_ptr_case_2SEXP);
-    Rcpp::traits::input_parameter< SEXP >::type md_ptr_case_3(md_ptr_case_3SEXP);
-    Rcpp::traits::input_parameter< SEXP >::type md_ptr_case_4(md_ptr_case_4SEXP);
-    Rcpp::traits::input_parameter< const arma::vec& >::type theta_12_init(theta_12_initSEXP);
-    Rcpp::traits::input_parameter< const arma::vec& >::type theta_13_init(theta_13_initSEXP);
-    Rcpp::traits::input_parameter< const arma::vec& >::type theta_23_init(theta_23_initSEXP);
-    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
-    Rcpp::traits::input_parameter< double >::type epsilon(epsilonSEXP);
-    rcpp_result_gen = Rcpp::wrap(optimize_penlik(md_ptr_case_1, md_ptr_case_2, md_ptr_case_3, md_ptr_case_4, theta_12_init, theta_13_init, theta_23_init, max_iter, epsilon));
-    return rcpp_result_gen;
-END_RCPP
-}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_idmEstimation_make_model_data", (DL_FUNC) &_idmEstimation_make_model_data, 1},
@@ -152,7 +133,6 @@ static const R_CallMethodDef CallEntries[] = {
     {"_idmEstimation_calc_case_3_log_likelihood", (DL_FUNC) &_idmEstimation_calc_case_3_log_likelihood, 4},
     {"_idmEstimation_calc_case_4_log_likelihood", (DL_FUNC) &_idmEstimation_calc_case_4_log_likelihood, 4},
     {"_idmEstimation_calc_penlik_log_likelihood", (DL_FUNC) &_idmEstimation_calc_penlik_log_likelihood, 7},
-    {"_idmEstimation_optimize_penlik", (DL_FUNC) &_idmEstimation_optimize_penlik, 9},
     {NULL, NULL, 0}
 };
 
