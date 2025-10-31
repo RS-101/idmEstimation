@@ -23,94 +23,111 @@ using namespace Rcpp;
 // 2->3: ill to death (hazard alpha_23, cumulative hazard A23)
 
 struct PenlikModelData {
-    // I spline matrices
-    arma::mat V_healthy_i_spline_mat_12;
-    arma::mat V_healthy_i_spline_mat_13;
+    // ========================================================================
+    // REQUIRED FIELDS - Common to all cases
+    // ========================================================================
     
-    arma::mat V_ill_i_spline_mat_12;  // V_{k+1} for cases 3 and 4
-    arma::mat V_ill_i_spline_mat_13;
-    arma::mat V_ill_i_spline_mat_23;
-
+    // V_0 splines (for factored out normalization term)
+    arma::mat V_0_i_spline_mat_12;
+    arma::mat V_0_i_spline_mat_13;
+    
+    // T_obs I-spline matrices (cumulative hazards at observation time)
     arma::mat T_obs_i_spline_mat_12;
     arma::mat T_obs_i_spline_mat_13;
     arma::mat T_obs_i_spline_mat_23;
-
-    arma::mat V_0_i_spline_mat_12;
-    arma::mat V_0_i_spline_mat_13;
-
+    
+    // Time values
+    arma::vec T_obs_values;
+    arma::vec V_healthy_values;
+    
+    // ========================================================================
+    // OPTIONAL FIELDS - Case-specific
+    // ========================================================================
+    
+    // M-spline matrices at T_obs (for hazard rates - cases 2 & 4)
+    arma::mat T_obs_m_spline_mat_13;  // Case 2: direct death from healthy
+    arma::mat T_obs_m_spline_mat_23;  // Cases 2 & 4: death from ill
+    
+    // Grid for integration from V_healthy to T_obs (cases 1 & 2)
     arma::mat grid_T_obs_i_spline_mat_12;
     arma::mat grid_T_obs_i_spline_mat_13;
     arma::mat grid_T_obs_i_spline_mat_23;
-
+    arma::mat grid_T_obs_m_spline_mat_12;
+    double dx_grid_T_obs;
+    
+    // Grid for integration from V_healthy to V_ill (cases 3 & 4)
     arma::mat grid_V_ill_i_spline_mat_12;
     arma::mat grid_V_ill_i_spline_mat_13;
     arma::mat grid_V_ill_i_spline_mat_23;
-
-    // M spline matrices
-    arma::mat T_obs_m_spline_mat_12;
-    arma::mat T_obs_m_spline_mat_13;
-    arma::mat T_obs_m_spline_mat_23;
-
-    double dx_grid_T_obs;
-    arma::mat grid_T_obs_m_spline_mat_12;
-    arma::mat grid_T_obs_m_spline_mat_13;
-    arma::mat grid_T_obs_m_spline_mat_23;
-
-    double dx_grid_V_ill;
     arma::mat grid_V_ill_m_spline_mat_12;
-    arma::mat grid_V_ill_m_spline_mat_13;
-    arma::mat grid_V_ill_m_spline_mat_23;
-    
-    // Actual time values
-    arma::vec T_obs_values;
-    arma::vec V_healthy_values;  // V_k in image
-    arma::vec V_ill_values;      // V_{k+1} in image
+    double dx_grid_V_ill;
+    arma::vec V_ill_values;
 
-    // constructor of list with matrices
+    // Constructor - only requires common fields, rest are optional
     PenlikModelData(const List& x) {
-        V_healthy_i_spline_mat_12 = as<arma::mat>(x["V_healthy_i_spline_mat_12"]);
-        V_healthy_i_spline_mat_13 = as<arma::mat>(x["V_healthy_i_spline_mat_13"]);
+        // ====================================================================
+        // REQUIRED FIELDS
+        // ====================================================================
+        V_0_i_spline_mat_12 = as<arma::mat>(x["V_0_i_spline_mat_12"]);
+        V_0_i_spline_mat_13 = as<arma::mat>(x["V_0_i_spline_mat_13"]);
         
-        // Optional fields for cases 3 and 4
-        if (x.containsElementNamed("V_ill_i_spline_mat_12")) {
-            V_ill_i_spline_mat_12 = as<arma::mat>(x["V_ill_i_spline_mat_12"]);
+        T_obs_i_spline_mat_12 = as<arma::mat>(x["T_obs_i_spline_mat_12"]);
+        T_obs_i_spline_mat_13 = as<arma::mat>(x["T_obs_i_spline_mat_13"]);
+        T_obs_i_spline_mat_23 = as<arma::mat>(x["T_obs_i_spline_mat_23"]);
+        
+        T_obs_values = as<arma::vec>(x["T_obs_values"]);
+        V_healthy_values = as<arma::vec>(x["V_healthy_values"]);
+        
+        // ====================================================================
+        // OPTIONAL FIELDS - Cases 2 & 4
+        // ====================================================================
+        if (x.containsElementNamed("T_obs_m_spline_mat_13")) {
+            T_obs_m_spline_mat_13 = as<arma::mat>(x["T_obs_m_spline_mat_13"]);
         }
-        if (x.containsElementNamed("V_ill_i_spline_mat_13")) {
-            V_ill_i_spline_mat_13 = as<arma::mat>(x["V_ill_i_spline_mat_13"]);
+        if (x.containsElementNamed("T_obs_m_spline_mat_23")) {
+            T_obs_m_spline_mat_23 = as<arma::mat>(x["T_obs_m_spline_mat_23"]);
         }
-        if (x.containsElementNamed("V_ill_i_spline_mat_23")) {
-            V_ill_i_spline_mat_23 = as<arma::mat>(x["V_ill_i_spline_mat_23"]);
+        
+        // ====================================================================
+        // OPTIONAL FIELDS - Cases 1 & 2 (integration from V_healthy to T_obs)
+        // ====================================================================
+        if (x.containsElementNamed("grid_T_obs_i_spline_mat_12")) {
+            grid_T_obs_i_spline_mat_12 = as<arma::mat>(x["grid_T_obs_i_spline_mat_12"]);
+        }
+        if (x.containsElementNamed("grid_T_obs_i_spline_mat_13")) {
+            grid_T_obs_i_spline_mat_13 = as<arma::mat>(x["grid_T_obs_i_spline_mat_13"]);
+        }
+        if (x.containsElementNamed("grid_T_obs_i_spline_mat_23")) {
+            grid_T_obs_i_spline_mat_23 = as<arma::mat>(x["grid_T_obs_i_spline_mat_23"]);
+        }
+        if (x.containsElementNamed("grid_T_obs_m_spline_mat_12")) {
+            grid_T_obs_m_spline_mat_12 = as<arma::mat>(x["grid_T_obs_m_spline_mat_12"]);
+        }
+        if (x.containsElementNamed("dx_grid_T_obs")) {
+            dx_grid_T_obs = as<double>(x["dx_grid_T_obs"]);
+        }
+        
+        // ====================================================================
+        // OPTIONAL FIELDS - Cases 3 & 4 (integration from V_healthy to V_ill)
+        // ====================================================================
+        if (x.containsElementNamed("grid_V_ill_i_spline_mat_12")) {
+            grid_V_ill_i_spline_mat_12 = as<arma::mat>(x["grid_V_ill_i_spline_mat_12"]);
+        }
+        if (x.containsElementNamed("grid_V_ill_i_spline_mat_13")) {
+            grid_V_ill_i_spline_mat_13 = as<arma::mat>(x["grid_V_ill_i_spline_mat_13"]);
+        }
+        if (x.containsElementNamed("grid_V_ill_i_spline_mat_23")) {
+            grid_V_ill_i_spline_mat_23 = as<arma::mat>(x["grid_V_ill_i_spline_mat_23"]);
+        }
+        if (x.containsElementNamed("grid_V_ill_m_spline_mat_12")) {
+            grid_V_ill_m_spline_mat_12 = as<arma::mat>(x["grid_V_ill_m_spline_mat_12"]);
+        }
+        if (x.containsElementNamed("dx_grid_V_ill")) {
+            dx_grid_V_ill = as<double>(x["dx_grid_V_ill"]);
         }
         if (x.containsElementNamed("V_ill_values")) {
             V_ill_values = as<arma::vec>(x["V_ill_values"]);
         }
-
-        T_obs_i_spline_mat_12 = as<arma::mat>(x["T_obs_i_spline_mat_12"]);
-        T_obs_i_spline_mat_13 = as<arma::mat>(x["T_obs_i_spline_mat_13"]);
-        T_obs_i_spline_mat_23 = as<arma::mat>(x["T_obs_i_spline_mat_23"]);
-        V_0_i_spline_mat_12 = as<arma::mat>(x["V_0_i_spline_mat_12"]);
-        V_0_i_spline_mat_13 = as<arma::mat>(x["V_0_i_spline_mat_13"]);
-        grid_T_obs_i_spline_mat_12 = as<arma::mat>(x["grid_T_obs_i_spline_mat_12"]);
-        grid_T_obs_i_spline_mat_13 = as<arma::mat>(x["grid_T_obs_i_spline_mat_13"]);
-        grid_T_obs_i_spline_mat_23 = as<arma::mat>(x["grid_T_obs_i_spline_mat_23"]);
-        grid_V_ill_i_spline_mat_12 = as<arma::mat>(x["grid_V_ill_i_spline_mat_12"]);
-        grid_V_ill_i_spline_mat_13 = as<arma::mat>(x["grid_V_ill_i_spline_mat_13"]);
-        grid_V_ill_i_spline_mat_23 = as<arma::mat>(x["grid_V_ill_i_spline_mat_23"]);
-        T_obs_m_spline_mat_12 = as<arma::mat>(x["T_obs_m_spline_mat_12"]);
-        T_obs_m_spline_mat_13 = as<arma::mat>(x["T_obs_m_spline_mat_13"]);
-        T_obs_m_spline_mat_23 = as<arma::mat>(x["T_obs_m_spline_mat_23"]);
-        dx_grid_T_obs = as<double>(x["dx_grid_T_obs"]);
-        dx_grid_V_ill = as<double>(x["dx_grid_V_ill"]);
-        grid_T_obs_m_spline_mat_12 = as<arma::mat>(x["grid_T_obs_m_spline_mat_12"]);
-        grid_T_obs_m_spline_mat_13 = as<arma::mat>(x["grid_T_obs_m_spline_mat_13"]);
-        grid_T_obs_m_spline_mat_23 = as<arma::mat>(x["grid_T_obs_m_spline_mat_23"]);
-        grid_V_ill_m_spline_mat_12 = as<arma::mat>(x["grid_V_ill_m_spline_mat_12"]);
-        grid_V_ill_m_spline_mat_13 = as<arma::mat>(x["grid_V_ill_m_spline_mat_13"]);
-        grid_V_ill_m_spline_mat_23 = as<arma::mat>(x["grid_V_ill_m_spline_mat_23"]);
-        
-        // Load time values
-        T_obs_values = as<arma::vec>(x["T_obs_values"]);
-        V_healthy_values = as<arma::vec>(x["V_healthy_values"]);
     }
 };
 
