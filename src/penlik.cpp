@@ -26,6 +26,10 @@ struct PenlikModelData {
     // I spline matrices
     arma::mat V_healthy_i_spline_mat_12;
     arma::mat V_healthy_i_spline_mat_13;
+    
+    arma::mat V_ill_i_spline_mat_12;  // V_{k+1} for cases 3 and 4
+    arma::mat V_ill_i_spline_mat_13;
+    arma::mat V_ill_i_spline_mat_23;
 
     arma::mat T_obs_i_spline_mat_12;
     arma::mat T_obs_i_spline_mat_13;
@@ -42,7 +46,7 @@ struct PenlikModelData {
     arma::mat grid_V_ill_i_spline_mat_13;
     arma::mat grid_V_ill_i_spline_mat_23;
 
-
+    // M spline matrices
     arma::mat T_obs_m_spline_mat_12;
     arma::mat T_obs_m_spline_mat_13;
     arma::mat T_obs_m_spline_mat_23;
@@ -59,13 +63,27 @@ struct PenlikModelData {
     
     // Actual time values
     arma::vec T_obs_values;
-    arma::vec V_healthy_values;
-    arma::vec V_ill_values;  // Added for case 4
+    arma::vec V_healthy_values;  // V_k in image
+    arma::vec V_ill_values;      // V_{k+1} in image
 
     // constructor of list with matrices
     PenlikModelData(const List& x) {
         V_healthy_i_spline_mat_12 = as<arma::mat>(x["V_healthy_i_spline_mat_12"]);
         V_healthy_i_spline_mat_13 = as<arma::mat>(x["V_healthy_i_spline_mat_13"]);
+        
+        // Optional fields for cases 3 and 4
+        if (x.containsElementNamed("V_ill_i_spline_mat_12")) {
+            V_ill_i_spline_mat_12 = as<arma::mat>(x["V_ill_i_spline_mat_12"]);
+        }
+        if (x.containsElementNamed("V_ill_i_spline_mat_13")) {
+            V_ill_i_spline_mat_13 = as<arma::mat>(x["V_ill_i_spline_mat_13"]);
+        }
+        if (x.containsElementNamed("V_ill_i_spline_mat_23")) {
+            V_ill_i_spline_mat_23 = as<arma::mat>(x["V_ill_i_spline_mat_23"]);
+        }
+        if (x.containsElementNamed("V_ill_values")) {
+            V_ill_values = as<arma::vec>(x["V_ill_values"]);
+        }
 
         T_obs_i_spline_mat_12 = as<arma::mat>(x["T_obs_i_spline_mat_12"]);
         T_obs_i_spline_mat_13 = as<arma::mat>(x["T_obs_i_spline_mat_13"]);
@@ -114,44 +132,18 @@ double calc_case_1_log_likelihood(
     const PenlikModelData& md = *p1;
     // case 1: healthy at T_obs
 
-    // R implementation data are all vectors and A12(T_obs) can be
-    // computed as md.T_obs_i_spline_mat_12 %*% theta_12
-    // We are calcuating the integral
-    // int_V_healthy^T_obs exp(-A12(t) - A13(t)) * a12(t) * exp(A23(t)) dt
-    // In the R code we use splinefun and trapezoidal rule to compute this integral
-
-
-    // term1 <- exp(-A12(T_obs) - A13(T_obs))
-
-    // factored_out <- exp(-A23(T_obs))
-
-    // grid <- seq(min(V_healthy), max(T_obs), length.out = 250)
-
-    // integrand <- exp(-A12(grid) - A13(grid)) * a12(grid) * exp(A23(grid))
-
-    // dx <- diff(grid)
-    // mid <- (integrand[-1] + integrand[-length(grid)]) / 2
-    // integral_at_grid <- c(0, cumsum(dx * mid))
-
-    // integral_fun <- splinefun(grid, integral_at_grid, method = "natural")
-
-    // term2 <- factored_out * (integral_fun(T_obs) - integral_fun(V_healthy))
+    // Factored out term: 1/exp(-A12(V_0) - A13(V_0))
+    arma::vec A12_V_0 = md.V_0_i_spline_mat_12 * theta_12;
+    arma::vec A13_V_0 = md.V_0_i_spline_mat_13 * theta_13;
+    arma::vec factored_out = arma::exp(A12_V_0 + A13_V_0);
 
     // Calculate term_1 with correct negative sign
     arma::vec cum_hazard_12 = md.T_obs_i_spline_mat_12 * theta_12;
     arma::vec cum_hazard_13 = md.T_obs_i_spline_mat_13 * theta_13;
     arma::vec term_1 = arma::exp(-(cum_hazard_12 + cum_hazard_13));
 
-    // Debug prints (only if we have enough elements)
-    if (cum_hazard_12.n_elem >= 3) {
-        Rcout << "C++ A12_T_obs first 3: " << cum_hazard_12.subvec(0,2).t();
-        Rcout << "C++ A13_T_obs first 3: " << cum_hazard_13.subvec(0,2).t();
-        Rcout << "C++ term_1 first 3: " << term_1.subvec(0,2).t();
-    }
-
-
     // Include A23 term in factored_out
-    arma::vec factored_out = arma::exp(-(md.T_obs_i_spline_mat_23 * theta_23));
+    arma::vec exp_A23_T_obs = arma::exp(-(md.T_obs_i_spline_mat_23 * theta_23));
 
     // Compute integrand
     arma::vec integrand = arma::exp(
@@ -178,17 +170,12 @@ double calc_case_1_log_likelihood(
     arma::uvec V_healthy_indices = arma::conv_to<arma::uvec>::from(
         arma::round((md.V_healthy_values - grid_min) / md.dx_grid_T_obs));
     
-    // Debug prints (only if we have enough elements)
-    if (T_obs_indices.n_elem >= 3) {
-        Rcout << "C++ T_obs_indices first 3: " << T_obs_indices.subvec(0,2).t();
-        Rcout << "C++ V_healthy_indices first 3: " << V_healthy_indices.subvec(0,2).t();
-    }
-    
-    arma::vec term_2 = factored_out %
+
+    arma::vec term_2 = exp_A23_T_obs %
         (integral.elem(T_obs_indices) -
          integral.elem(V_healthy_indices));
 
-    double log_likelihood = arma::accu(arma::log(term_1 + term_2));
+    double log_likelihood = arma::accu(arma::log(factored_out % (term_1 + term_2)));
 
 
     return log_likelihood;
@@ -206,10 +193,16 @@ double calc_case_2_log_likelihood(
     const PenlikModelData& md = *p2;
     
     // Case 2: Died (state 3) at T_obs, was healthy at V_healthy
-    // Likelihood: exp(-A12(T_obs) - A13(T_obs)) * a13(T_obs) + 
+    // Likelihood: 1/exp(-A12(V_0)-A13(V_0))* (exp(-A12(T_obs) - A13(T_obs)) * a13(T_obs) + 
     //             exp(-A23(T_obs)) * a23(T_obs) * 
-    //             integral from V_healthy to T_obs of exp(-A12(t) - A13(t)) * a12(t) * exp(A23(t)) dt
+    //             integral from V_healthy to T_obs of exp(-A12(t) - A13(t)) * a12(t) * exp(A23(t)) dt)
     
+
+    // Factored out term: 1/exp(-A12(V_0) - A13(V_0))
+    arma::vec A12_V_0 = md.V_0_i_spline_mat_12 * theta_12;
+    arma::vec A13_V_0 = md.V_0_i_spline_mat_13 * theta_13;
+    arma::vec factored_out = arma::exp(A12_V_0 + A13_V_0);
+
     // Term 1: Direct transition 1->3
     arma::vec cum_hazard_12 = md.T_obs_i_spline_mat_12 * theta_12;
     arma::vec cum_hazard_13 = md.T_obs_i_spline_mat_13 * theta_13;
@@ -220,7 +213,7 @@ double calc_case_2_log_likelihood(
     // Term 2: Transition 1->2->3
     arma::vec hazard_23 = md.T_obs_m_spline_mat_23 * theta_23;
     arma::vec cum_hazard_23 = md.T_obs_i_spline_mat_23 * theta_23;
-    arma::vec factored_out = arma::exp(-cum_hazard_23) % hazard_23;
+    arma::vec exp_A23_T_obs = arma::exp(-cum_hazard_23) % hazard_23;
     
     // Compute integrand: exp(-A12(t) - A13(t)) * a12(t) * exp(A23(t))
     arma::vec integrand = arma::exp(
@@ -244,11 +237,11 @@ double calc_case_2_log_likelihood(
     arma::uvec V_healthy_indices = arma::conv_to<arma::uvec>::from(
         arma::round((md.V_healthy_values - grid_min) / md.dx_grid_T_obs));
     
-    arma::vec term_2 = factored_out % 
+    arma::vec term_2 = exp_A23_T_obs % 
         (integral.elem(T_obs_indices) - integral.elem(V_healthy_indices));
-    
-    double log_likelihood = arma::accu(arma::log(term_1 + term_2));
-    
+
+    double log_likelihood = arma::accu(arma::log(factored_out % (term_1 + term_2)));
+
     return log_likelihood;
 }
 
@@ -262,7 +255,58 @@ double calc_case_3_log_likelihood(
     Rcpp::XPtr<PenlikModelData> p3(md_ptr_case_3);
     const PenlikModelData& md = *p3;
     
-
+    // Case 3: Subject is healthy at V_k (V_healthy), ill at V_{k+1} (V_ill), and still alive at T
+    // From image formula (iii):
+    // L = (1/exp(-A01(V_k) - A02(V_k))) * 
+    //     ∫_{V_k}^{V_{k+1}} exp(-A01(u) - A02(u)) * α01(u) * exp(-A12(T) - A12(u)) du
+    //
+    // Translating to our notation (01→12, 02→13, 12→23):
+    // L = (1/exp(-A12(V_0) - A13(V_0))) * 
+    //     ∫_{V_healthy}^{V_ill} exp(-A12(u) - A13(u)) * α12(u) * exp(-A23(T) - A23(u)) du
+    
+    // Factored out term: 1/exp(-A12(V_0) - A13(V_0))
+    arma::vec A12_V_0 = md.V_0_i_spline_mat_12 * theta_12;
+    arma::vec A13_V_0 = md.V_0_i_spline_mat_13 * theta_13;
+    arma::vec factored_out = arma::exp(A12_V_0 + A13_V_0);
+    
+    // For the integral, we need exp(-A23(T))
+    arma::vec A23_T_obs = md.T_obs_i_spline_mat_23 * theta_23;
+    arma::vec exp_neg_A23_T = arma::exp(-A23_T_obs);
+    
+    // Compute integrand over grid from V_healthy to V_ill:
+    // exp(-A12(u) - A13(u)) * α12(u) * exp(-A23(T)) * exp(A23(u))
+    // = exp(-A12(u) - A13(u)) * α12(u) * exp(A23(u) - A23(T))
+    
+    arma::vec integrand = arma::exp(
+        -(md.grid_V_ill_i_spline_mat_12 * theta_12) -
+        (md.grid_V_ill_i_spline_mat_13 * theta_13) +
+        (md.grid_V_ill_i_spline_mat_23 * theta_23))
+        % (md.grid_V_ill_m_spline_mat_12 * theta_12);
+    
+    // Trapezoidal rule
+    arma::vec mid = (integrand.subvec(0, integrand.n_elem-2) +
+                     integrand.subvec(1, integrand.n_elem-1)) / 2.0;
+    
+    arma::vec integral(mid.n_elem + 1);
+    integral(0) = 0;
+    integral.subvec(1, integral.n_elem-1) = arma::cumsum(mid * md.dx_grid_V_ill);
+    
+    // Get indices for V_healthy and V_ill in the grid
+    double grid_min = arma::min(md.V_healthy_values);
+    arma::uvec V_healthy_indices = arma::conv_to<arma::uvec>::from(
+        arma::round((md.V_healthy_values - grid_min) / md.dx_grid_V_ill));
+    arma::uvec V_ill_indices = arma::conv_to<arma::uvec>::from(
+        arma::round((md.V_ill_values - grid_min) / md.dx_grid_V_ill));
+    
+    // Compute the integral from V_healthy to V_ill
+    arma::vec integral_value = integral.elem(V_ill_indices) - integral.elem(V_healthy_indices);
+    
+    // Combine: factored_out * exp(-A23(T)) * integral_value
+    arma::vec likelihood = factored_out % exp_neg_A23_T % integral_value;
+    
+    double log_likelihood = arma::accu(arma::log(likelihood));
+    
+    return log_likelihood;
 }
 
 // [[Rcpp::export]]
@@ -272,8 +316,62 @@ double calc_case_4_log_likelihood(
     const arma::vec& theta_13,
     const arma::vec& theta_23
 ) {
-
-
+    Rcpp::XPtr<PenlikModelData> p4(md_ptr_case_4);
+    const PenlikModelData& md = *p4;
+    
+    // Case 4: Subject is healthy at V_k (V_healthy), ill at V_{k+1} (V_ill), and dies at T
+    // From image formula (iv):
+    // L = (1/exp(-A01(V_k) - A02(V_k))) * 
+    //     ∫_{V_k}^{V_{k+1}} exp(-A01(u) - A02(u)) * α01(u) * exp(-A12(T) - A12(u)) * α12(T) du
+    //
+    // Translating to our notation (01→12, 02→13, 12→23):
+    // L = (1/exp(-A12(V_0) - A13(V_0))) * 
+    //     ∫_{V_healthy}^{V_ill} exp(-A12(u) - A13(u)) * α12(u) * exp(-A23(T) - A23(u)) * α23(T) du
+    
+    // Factored out term: 1/exp(-A12(V_0) - A13(V_0))
+    arma::vec A12_V_0 = md.V_0_i_spline_mat_12 * theta_12;
+    arma::vec A13_V_0 = md.V_0_i_spline_mat_13 * theta_13;
+    arma::vec factored_out = arma::exp(A12_V_0 + A13_V_0);
+    
+    // Additional factor: α23(T) * exp(-A23(T))
+    arma::vec A23_T_obs = md.T_obs_i_spline_mat_23 * theta_23;
+    arma::vec a23_T_obs = md.T_obs_m_spline_mat_23 * theta_23;
+    arma::vec exp_neg_A23_T_times_a23 = arma::exp(-A23_T_obs) % a23_T_obs;
+    
+    // Compute integrand over grid from V_healthy to V_ill:
+    // exp(-A12(u) - A13(u)) * α12(u) * exp(A23(u) - A23(T)) * α23(T)
+    // Note: α23(T) is constant w.r.t. integration variable u
+    
+    arma::vec integrand = arma::exp(
+        -(md.grid_V_ill_i_spline_mat_12 * theta_12) -
+        (md.grid_V_ill_i_spline_mat_13 * theta_13) +
+        (md.grid_V_ill_i_spline_mat_23 * theta_23))
+        % (md.grid_V_ill_m_spline_mat_12 * theta_12);
+    
+    // Trapezoidal rule
+    arma::vec mid = (integrand.subvec(0, integrand.n_elem-2) +
+                     integrand.subvec(1, integrand.n_elem-1)) / 2.0;
+    
+    arma::vec integral(mid.n_elem + 1);
+    integral(0) = 0;
+    integral.subvec(1, integral.n_elem-1) = arma::cumsum(mid * md.dx_grid_V_ill);
+    
+    // Get indices for V_healthy and V_ill in the grid
+    double grid_min = arma::min(md.V_healthy_values);
+    arma::uvec V_healthy_indices = arma::conv_to<arma::uvec>::from(
+        arma::round((md.V_healthy_values - grid_min) / md.dx_grid_V_ill));
+    arma::uvec V_ill_indices = arma::conv_to<arma::uvec>::from(
+        arma::round((md.V_ill_values - grid_min) / md.dx_grid_V_ill));
+    
+    // Compute the integral from V_healthy to V_ill
+    arma::vec integral_value = integral.elem(V_ill_indices) - integral.elem(V_healthy_indices);
+    
+    // Combine: factored_out * exp(-A23(T)) * α23(T) * integral_value
+    arma::vec likelihood = factored_out % exp_neg_A23_T_times_a23 % integral_value;
+    
+    double log_likelihood = arma::accu(arma::log(likelihood));
+    
+    return log_likelihood;
 }
 
 // // [[Rcpp::export]]
