@@ -785,3 +785,39 @@ test_that("calc_case_4_log_likelihood works with constant hazard rates", {
   expect_true(is.finite(log_lik_cpp))
   expect_length(log_lik_cpp, 1)
 })
+
+
+testthat::test_that("calc_full_log_likelihood works correctly", {
+  # This test checks that the full log-likelihood function correctly combines
+  # the individual case log-likelihoods.
+  set.seed(999)
+  n <- 40
+
+  # Create status vectors
+  status_dead <- c(rep(0, 10), rep(1, 10), rep(0, 10), rep(1, 10))
+  status_ill <- c(rep(0, 10), rep(0, 10), rep(1, 10), rep(1, 10))
+
+  # Create time vectors
+  V_0 <- rep(0, n)
+  V_healthy <- sort(runif(n, 0, 2))
+  V_ill <- pmax(V_healthy, sort(runif(n, 1, 4)))
+  T_obs <- pmax(V_ill, sort(runif(n, 3, 6)))
+
+  # Setup model
+  model_pointers_list <- setup_cpp_model(
+    V_0, V_healthy, V_ill, T_obs,
+    status_dead, status_ill
+  )
+
+  calc_penlik_log_likelihood(
+    model_pointers_list$case_1,
+    model_pointers_list$case_2,
+    model_pointers_list$case_3,
+    model_pointers_list$case_4,
+    theta_12 = rep(0.1, 12),
+    theta_13 = rep(0.1, 12),
+    theta_23 = rep(0.1, 12)
+  )
+
+
+})

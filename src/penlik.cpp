@@ -391,39 +391,59 @@ double calc_case_4_log_likelihood(
     return log_likelihood;
 }
 
-// // [[Rcpp::export]]
-// double calc_penlik_log_likelihood(
-//     SEXP md_ptr_case_1,
-//     SEXP md_ptr_case_2,
-//     SEXP md_ptr_case_3,
-//     SEXP md_ptr_case_4,
-//     const arma::vec& theta_12,
-//     const arma::vec& theta_13,
-//     const arma::vec& theta_23
-// ) {
-//     Rcpp::XPtr<PenlikModelData> p1(md_ptr_case_1);
-//     const PenlikModelData& md_case_1 = *p1;
+// [[Rcpp::export]]
+double calc_penlik_log_likelihood(
+    SEXP md_ptr_case_1,
+    SEXP md_ptr_case_2,
+    SEXP md_ptr_case_3,
+    SEXP md_ptr_case_4,
+    const arma::vec& theta_12,
+    const arma::vec& theta_13,
+    const arma::vec& theta_23
+) {
+    Rcpp::XPtr<PenlikModelData> p1(md_ptr_case_1);
+    const PenlikModelData& md_case_1 = *p1;
 
-//     Rcpp::XPtr<PenlikModelData> p2(md_ptr_case_2);
-//     const PenlikModelData& md_case_2 = *p2;
+    Rcpp::XPtr<PenlikModelData> p2(md_ptr_case_2);
+    const PenlikModelData& md_case_2 = *p2;
 
-//     Rcpp::XPtr<PenlikModelData> p3(md_ptr_case_3);
-//     const PenlikModelData& md_case_3 = *p3;
+    Rcpp::XPtr<PenlikModelData> p3(md_ptr_case_3);
+    const PenlikModelData& md_case_3 = *p3;
 
-//     Rcpp::XPtr<PenlikModelData> p4(md_ptr_case_4);
-//     const PenlikModelData& md_case_4 = *p4;
+    Rcpp::XPtr<PenlikModelData> p4(md_ptr_case_4);
+    const PenlikModelData& md_case_4 = *p4;
 
-//     double log_likelihood = 0.0;
+    double log_likelihood = 0.0;
+
+    // calculate log-likelihood contributions from each case
+    if (md_case_1.T_obs_values.n_elem > 0) {
+        log_likelihood += calc_case_1_log_likelihood(
+            md_ptr_case_1, theta_12, theta_13, theta_23);
+    }
+    if (md_case_2.T_obs_values.n_elem > 0) {
+        log_likelihood += calc_case_2_log_likelihood(
+            md_ptr_case_2, theta_12, theta_13, theta_23);
+    }
+    if (md_case_3.T_obs_values.n_elem > 0) {
+        log_likelihood += calc_case_3_log_likelihood(
+            md_ptr_case_3, theta_12, theta_13, theta_23);
+    }
+    if (md_case_4.T_obs_values.n_elem > 0) {
+        log_likelihood += calc_case_4_log_likelihood(
+            md_ptr_case_4, theta_12, theta_13, theta_23);
+    }
+
+
+    return log_likelihood;
+}
+
+
+// [[Rcpp::export]]
+list optimize_penlik() {
+
+    Rcpp::Numerical::optim_lbfgs();
 
 
 
-//     return log_likelihood;
-// }
 
-
-
-// void optimize_penlik() {
-
-
-//     Rcpp::Numerical::optim_lbfgs();
-// }
+}

@@ -29,3 +29,7 @@ calc_case_4_log_likelihood <- function(md_ptr_case_4, theta_12, theta_13, theta_
     .Call(`_idmEstimation_calc_case_4_log_likelihood`, md_ptr_case_4, theta_12, theta_13, theta_23)
 }
 
+calc_penlik_log_likelihood <- function(md_ptr_case_1, md_ptr_case_2, md_ptr_case_3, md_ptr_case_4, theta_12, theta_13, theta_23) {
+    .Call(`_idmEstimation_calc_penlik_log_likelihood`, md_ptr_case_1, md_ptr_case_2, md_ptr_case_3, md_ptr_case_4, theta_12, theta_13, theta_23)
+}
+
