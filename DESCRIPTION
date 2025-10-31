@@ -25,3 +25,4 @@ LinkingTo:
     RcppArmadillo,
     RcppEigen,
     RcppNumerical
+RoxygenNote: 7.3.3
