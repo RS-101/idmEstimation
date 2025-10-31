@@ -127,10 +127,12 @@ double calc_case_1_log_likelihood(
     arma::vec cum_hazard_13 = md.T_obs_i_spline_mat_13 * theta_13;
     arma::vec term_1 = arma::exp(-(cum_hazard_12 + cum_hazard_13));
 
-    // Debug prints
-    Rcout << "C++ A12_T_obs first 3: " << cum_hazard_12.subvec(0,2).t();
-    Rcout << "C++ A13_T_obs first 3: " << cum_hazard_13.subvec(0,2).t();
-    Rcout << "C++ term_1 first 3: " << term_1.subvec(0,2).t();
+    // Debug prints (only if we have enough elements)
+    if (cum_hazard_12.n_elem >= 3) {
+        Rcout << "C++ A12_T_obs first 3: " << cum_hazard_12.subvec(0,2).t();
+        Rcout << "C++ A13_T_obs first 3: " << cum_hazard_13.subvec(0,2).t();
+        Rcout << "C++ term_1 first 3: " << term_1.subvec(0,2).t();
+    }
 
 
     // Include A23 term in factored_out
@@ -161,8 +163,13 @@ double calc_case_1_log_likelihood(
     arma::uvec V_healthy_indices = arma::conv_to<arma::uvec>::from(
         arma::round((md.V_healthy_values - grid_min) / md.dx_grid_T_obs));
     
-    Rcout << "C++ T_obs_indices first 3: " << T_obs_indices.subvec(0,2).t();
-    Rcout << "C++ V_healthy_indices first 3: " << V_healthy_indices.subvec(0,2).t();    arma::vec term_2 = factored_out %
+    // Debug prints (only if we have enough elements)
+    if (T_obs_indices.n_elem >= 3) {
+        Rcout << "C++ T_obs_indices first 3: " << T_obs_indices.subvec(0,2).t();
+        Rcout << "C++ V_healthy_indices first 3: " << V_healthy_indices.subvec(0,2).t();
+    }
+    
+    arma::vec term_2 = factored_out %
         (integral.elem(T_obs_indices) -
          integral.elem(V_healthy_indices));
 
