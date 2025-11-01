@@ -2,7 +2,6 @@
 // Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 #include <RcppArmadillo.h>
-#include <RcppEigen.h>
 #include <Rcpp.h>
 
 using namespace Rcpp;
@@ -40,86 +39,61 @@ BEGIN_RCPP
 END_RCPP
 }
 // create_penlik_model_data
-SEXP create_penlik_model_data(List x);
-RcppExport SEXP _idmEstimation_create_penlik_model_data(SEXP xSEXP) {
+SEXP create_penlik_model_data(List data);
+RcppExport SEXP _idmEstimation_create_penlik_model_data(SEXP dataSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< List >::type x(xSEXP);
-    rcpp_result_gen = Rcpp::wrap(create_penlik_model_data(x));
+    Rcpp::traits::input_parameter< List >::type data(dataSEXP);
+    rcpp_result_gen = Rcpp::wrap(create_penlik_model_data(data));
     return rcpp_result_gen;
 END_RCPP
 }
-// calc_case_1_log_likelihood
-double calc_case_1_log_likelihood(SEXP md_ptr_case_1, const arma::vec& theta_12, const arma::vec& theta_13, const arma::vec& theta_23);
-RcppExport SEXP _idmEstimation_calc_case_1_log_likelihood(SEXP md_ptr_case_1SEXP, SEXP theta_12SEXP, SEXP theta_13SEXP, SEXP theta_23SEXP) {
+// calc_log_likelihood
+double calc_log_likelihood(SEXP md_ptr, const arma::vec& theta_12, const arma::vec& theta_13, const arma::vec& theta_23);
+RcppExport SEXP _idmEstimation_calc_log_likelihood(SEXP md_ptrSEXP, SEXP theta_12SEXP, SEXP theta_13SEXP, SEXP theta_23SEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type md_ptr_case_1(md_ptr_case_1SEXP);
+    Rcpp::traits::input_parameter< SEXP >::type md_ptr(md_ptrSEXP);
     Rcpp::traits::input_parameter< const arma::vec& >::type theta_12(theta_12SEXP);
     Rcpp::traits::input_parameter< const arma::vec& >::type theta_13(theta_13SEXP);
     Rcpp::traits::input_parameter< const arma::vec& >::type theta_23(theta_23SEXP);
-    rcpp_result_gen = Rcpp::wrap(calc_case_1_log_likelihood(md_ptr_case_1, theta_12, theta_13, theta_23));
+    rcpp_result_gen = Rcpp::wrap(calc_log_likelihood(md_ptr, theta_12, theta_13, theta_23));
     return rcpp_result_gen;
 END_RCPP
 }
-// calc_case_2_log_likelihood
-double calc_case_2_log_likelihood(SEXP md_ptr_case_2, const arma::vec& theta_12, const arma::vec& theta_13, const arma::vec& theta_23);
-RcppExport SEXP _idmEstimation_calc_case_2_log_likelihood(SEXP md_ptr_case_2SEXP, SEXP theta_12SEXP, SEXP theta_13SEXP, SEXP theta_23SEXP) {
+// calc_full_penalty
+double calc_full_penalty(SEXP md_ptr, const arma::vec& theta_12, const arma::vec& theta_13, const arma::vec& theta_23, double kappa_12, double kappa_13, double kappa_23);
+RcppExport SEXP _idmEstimation_calc_full_penalty(SEXP md_ptrSEXP, SEXP theta_12SEXP, SEXP theta_13SEXP, SEXP theta_23SEXP, SEXP kappa_12SEXP, SEXP kappa_13SEXP, SEXP kappa_23SEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type md_ptr_case_2(md_ptr_case_2SEXP);
+    Rcpp::traits::input_parameter< SEXP >::type md_ptr(md_ptrSEXP);
     Rcpp::traits::input_parameter< const arma::vec& >::type theta_12(theta_12SEXP);
     Rcpp::traits::input_parameter< const arma::vec& >::type theta_13(theta_13SEXP);
     Rcpp::traits::input_parameter< const arma::vec& >::type theta_23(theta_23SEXP);
-    rcpp_result_gen = Rcpp::wrap(calc_case_2_log_likelihood(md_ptr_case_2, theta_12, theta_13, theta_23));
+    Rcpp::traits::input_parameter< double >::type kappa_12(kappa_12SEXP);
+    Rcpp::traits::input_parameter< double >::type kappa_13(kappa_13SEXP);
+    Rcpp::traits::input_parameter< double >::type kappa_23(kappa_23SEXP);
+    rcpp_result_gen = Rcpp::wrap(calc_full_penalty(md_ptr, theta_12, theta_13, theta_23, kappa_12, kappa_13, kappa_23));
     return rcpp_result_gen;
 END_RCPP
 }
-// calc_case_3_log_likelihood
-double calc_case_3_log_likelihood(SEXP md_ptr_case_3, const arma::vec& theta_12, const arma::vec& theta_13, const arma::vec& theta_23);
-RcppExport SEXP _idmEstimation_calc_case_3_log_likelihood(SEXP md_ptr_case_3SEXP, SEXP theta_12SEXP, SEXP theta_13SEXP, SEXP theta_23SEXP) {
+// calc_penalized_log_likelihood
+List calc_penalized_log_likelihood(SEXP md_ptr, const arma::vec& theta_12, const arma::vec& theta_13, const arma::vec& theta_23, double kappa_12, double kappa_13, double kappa_23);
+RcppExport SEXP _idmEstimation_calc_penalized_log_likelihood(SEXP md_ptrSEXP, SEXP theta_12SEXP, SEXP theta_13SEXP, SEXP theta_23SEXP, SEXP kappa_12SEXP, SEXP kappa_13SEXP, SEXP kappa_23SEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type md_ptr_case_3(md_ptr_case_3SEXP);
+    Rcpp::traits::input_parameter< SEXP >::type md_ptr(md_ptrSEXP);
     Rcpp::traits::input_parameter< const arma::vec& >::type theta_12(theta_12SEXP);
     Rcpp::traits::input_parameter< const arma::vec& >::type theta_13(theta_13SEXP);
     Rcpp::traits::input_parameter< const arma::vec& >::type theta_23(theta_23SEXP);
-    rcpp_result_gen = Rcpp::wrap(calc_case_3_log_likelihood(md_ptr_case_3, theta_12, theta_13, theta_23));
-    return rcpp_result_gen;
-END_RCPP
-}
-// calc_case_4_log_likelihood
-double calc_case_4_log_likelihood(SEXP md_ptr_case_4, const arma::vec& theta_12, const arma::vec& theta_13, const arma::vec& theta_23);
-RcppExport SEXP _idmEstimation_calc_case_4_log_likelihood(SEXP md_ptr_case_4SEXP, SEXP theta_12SEXP, SEXP theta_13SEXP, SEXP theta_23SEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type md_ptr_case_4(md_ptr_case_4SEXP);
-    Rcpp::traits::input_parameter< const arma::vec& >::type theta_12(theta_12SEXP);
-    Rcpp::traits::input_parameter< const arma::vec& >::type theta_13(theta_13SEXP);
-    Rcpp::traits::input_parameter< const arma::vec& >::type theta_23(theta_23SEXP);
-    rcpp_result_gen = Rcpp::wrap(calc_case_4_log_likelihood(md_ptr_case_4, theta_12, theta_13, theta_23));
-    return rcpp_result_gen;
-END_RCPP
-}
-// calc_penlik_log_likelihood
-double calc_penlik_log_likelihood(SEXP md_ptr_case_1, SEXP md_ptr_case_2, SEXP md_ptr_case_3, SEXP md_ptr_case_4, const arma::vec& theta_12, const arma::vec& theta_13, const arma::vec& theta_23);
-RcppExport SEXP _idmEstimation_calc_penlik_log_likelihood(SEXP md_ptr_case_1SEXP, SEXP md_ptr_case_2SEXP, SEXP md_ptr_case_3SEXP, SEXP md_ptr_case_4SEXP, SEXP theta_12SEXP, SEXP theta_13SEXP, SEXP theta_23SEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< SEXP >::type md_ptr_case_1(md_ptr_case_1SEXP);
-    Rcpp::traits::input_parameter< SEXP >::type md_ptr_case_2(md_ptr_case_2SEXP);
-    Rcpp::traits::input_parameter< SEXP >::type md_ptr_case_3(md_ptr_case_3SEXP);
-    Rcpp::traits::input_parameter< SEXP >::type md_ptr_case_4(md_ptr_case_4SEXP);
-    Rcpp::traits::input_parameter< const arma::vec& >::type theta_12(theta_12SEXP);
-    Rcpp::traits::input_parameter< const arma::vec& >::type theta_13(theta_13SEXP);
-    Rcpp::traits::input_parameter< const arma::vec& >::type theta_23(theta_23SEXP);
-    rcpp_result_gen = Rcpp::wrap(calc_penlik_log_likelihood(md_ptr_case_1, md_ptr_case_2, md_ptr_case_3, md_ptr_case_4, theta_12, theta_13, theta_23));
+    Rcpp::traits::input_parameter< double >::type kappa_12(kappa_12SEXP);
+    Rcpp::traits::input_parameter< double >::type kappa_13(kappa_13SEXP);
+    Rcpp::traits::input_parameter< double >::type kappa_23(kappa_23SEXP);
+    rcpp_result_gen = Rcpp::wrap(calc_penalized_log_likelihood(md_ptr, theta_12, theta_13, theta_23, kappa_12, kappa_13, kappa_23));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -128,11 +102,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_idmEstimation_make_model_data", (DL_FUNC) &_idmEstimation_make_model_data, 1},
     {"_idmEstimation_em_fit", (DL_FUNC) &_idmEstimation_em_fit, 6},
     {"_idmEstimation_create_penlik_model_data", (DL_FUNC) &_idmEstimation_create_penlik_model_data, 1},
-    {"_idmEstimation_calc_case_1_log_likelihood", (DL_FUNC) &_idmEstimation_calc_case_1_log_likelihood, 4},
-    {"_idmEstimation_calc_case_2_log_likelihood", (DL_FUNC) &_idmEstimation_calc_case_2_log_likelihood, 4},
-    {"_idmEstimation_calc_case_3_log_likelihood", (DL_FUNC) &_idmEstimation_calc_case_3_log_likelihood, 4},
-    {"_idmEstimation_calc_case_4_log_likelihood", (DL_FUNC) &_idmEstimation_calc_case_4_log_likelihood, 4},
-    {"_idmEstimation_calc_penlik_log_likelihood", (DL_FUNC) &_idmEstimation_calc_penlik_log_likelihood, 7},
+    {"_idmEstimation_calc_log_likelihood", (DL_FUNC) &_idmEstimation_calc_log_likelihood, 4},
+    {"_idmEstimation_calc_full_penalty", (DL_FUNC) &_idmEstimation_calc_full_penalty, 7},
+    {"_idmEstimation_calc_penalized_log_likelihood", (DL_FUNC) &_idmEstimation_calc_penalized_log_likelihood, 7},
     {NULL, NULL, 0}
 };
 

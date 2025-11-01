@@ -86,8 +86,8 @@ test_that("calc_case_1_log_likelihood works with constant hazard rates", {
   theta_13 <- fit_constant_hazard(fit_spline_13, fit_times, alpha_13)
   theta_23 <- fit_constant_hazard(fit_spline_23, fit_times, alpha_23)
 
-  # Create model data
-  model_data <- list(
+  # Create case_1 specific model data
+  case_1_data <- list(
     V_healthy_i_spline_mat_12 = spline_V_healthy_12$i_spline,
     V_healthy_i_spline_mat_13 = spline_V_healthy_13$i_spline,
 
@@ -102,34 +102,33 @@ test_that("calc_case_1_log_likelihood works with constant hazard rates", {
     grid_T_obs_i_spline_mat_13 = spline_grid_T_obs_13$i_spline,
     grid_T_obs_i_spline_mat_23 = spline_grid_T_obs_23$i_spline,
 
-    grid_V_ill_i_spline_mat_12 = spline_grid_V_ill_12$i_spline,
-    grid_V_ill_i_spline_mat_13 = spline_grid_V_ill_13$i_spline,
-    grid_V_ill_i_spline_mat_23 = spline_grid_V_ill_23$i_spline,
-
-    T_obs_m_spline_mat_12 = spline_T_obs_12$m_spline,
-    T_obs_m_spline_mat_13 = spline_T_obs_13$m_spline,
-    T_obs_m_spline_mat_23 = spline_T_obs_23$m_spline,
+    grid_T_obs_m_spline_mat_12 = spline_grid_T_obs_12$m_spline,
 
     dx_grid_T_obs = dx_grid_T_obs,
-    dx_grid_V_ill = dx_grid_V_ill,
-
-    grid_T_obs_m_spline_mat_12 = spline_grid_T_obs_12$m_spline,
-    grid_T_obs_m_spline_mat_13 = spline_grid_T_obs_13$m_spline,
-    grid_T_obs_m_spline_mat_23 = spline_grid_T_obs_23$m_spline,
-
-    grid_V_ill_m_spline_mat_12 = spline_grid_V_ill_12$m_spline,
-    grid_V_ill_m_spline_mat_13 = spline_grid_V_ill_13$m_spline,
-    grid_V_ill_m_spline_mat_23 = spline_grid_V_ill_23$m_spline,
 
     T_obs_values = T_obs,
     V_healthy_values = V_healthy
   )
 
-  # Create pointer to model data
-  md_ptr <- create_penlik_model_data(model_data)
+  # Create dummy penalty matrices (for full model structure)
+  n_basis <- ncol(spline_T_obs_12$i_spline)
+  penalty_matrix_12 <- diag(n_basis)
+  penalty_matrix_13 <- diag(n_basis)
+  penalty_matrix_23 <- diag(n_basis)
 
-  # Calculate log-likelihood using C++
-  log_lik_cpp <- calc_case_1_log_likelihood(md_ptr, theta_12, theta_13, theta_23)
+  # Create full model data with only case_1 populated
+  full_model_data <- list(
+    case_1 = case_1_data,
+    penalty_matrix_12 = penalty_matrix_12,
+    penalty_matrix_13 = penalty_matrix_13,
+    penalty_matrix_23 = penalty_matrix_23
+  )
+
+  # Create pointer to full model data
+  md_ptr <- create_penlik_model_data(full_model_data)
+
+  # Calculate log-likelihood using C++ through calc_log_likelihood
+  log_lik_cpp <- calc_log_likelihood(md_ptr, theta_12, theta_13, theta_23)
 
   # Calculate log-likelihood using R (matching C++ implementation)
   A12_V_0 <- spline_V_0_12$i_spline %*% theta_12
@@ -242,8 +241,8 @@ test_that("calc_case_1_log_likelihood analytical validation for simple case", {
   theta_13 <- fit_constant(fit_spline, fit_times, alpha_13)
   theta_23 <- fit_constant(fit_spline, fit_times, alpha_23)
 
-  # Create model data
-  model_data <- list(
+  # Create case_1 specific model data
+  case_1_data <- list(
     V_healthy_i_spline_mat_12 = spline_V_healthy_12$i_spline,
     V_healthy_i_spline_mat_13 = spline_V_healthy_13$i_spline,
 
@@ -258,31 +257,30 @@ test_that("calc_case_1_log_likelihood analytical validation for simple case", {
     grid_T_obs_i_spline_mat_13 = spline_grid_T_obs_13$i_spline,
     grid_T_obs_i_spline_mat_23 = spline_grid_T_obs_23$i_spline,
 
-    grid_V_ill_i_spline_mat_12 = spline_grid_V_ill_12$i_spline,
-    grid_V_ill_i_spline_mat_13 = spline_grid_V_ill_13$i_spline,
-    grid_V_ill_i_spline_mat_23 = spline_grid_V_ill_23$i_spline,
-
-    T_obs_m_spline_mat_12 = spline_T_obs_12$m_spline,
-    T_obs_m_spline_mat_13 = spline_T_obs_13$m_spline,
-    T_obs_m_spline_mat_23 = spline_T_obs_23$m_spline,
+    grid_T_obs_m_spline_mat_12 = spline_grid_T_obs_12$m_spline,
 
     dx_grid_T_obs = dx_grid_T_obs,
-    dx_grid_V_ill = dx_grid_V_ill,
-
-    grid_T_obs_m_spline_mat_12 = spline_grid_T_obs_12$m_spline,
-    grid_T_obs_m_spline_mat_13 = spline_grid_T_obs_13$m_spline,
-    grid_T_obs_m_spline_mat_23 = spline_grid_T_obs_23$m_spline,
-
-    grid_V_ill_m_spline_mat_12 = spline_grid_V_ill_12$m_spline,
-    grid_V_ill_m_spline_mat_13 = spline_grid_V_ill_13$m_spline,
-    grid_V_ill_m_spline_mat_23 = spline_grid_V_ill_23$m_spline,
 
     T_obs_values = T_obs,
     V_healthy_values = V_healthy
   )
 
-  md_ptr <- create_penlik_model_data(model_data)
-  log_lik_cpp <- calc_case_1_log_likelihood(md_ptr, theta_12, theta_13, theta_23)
+  # Create dummy penalty matrices (for full model structure)
+  n_basis <- ncol(spline_T_obs_12$i_spline)
+  penalty_matrix_12 <- diag(n_basis)
+  penalty_matrix_13 <- diag(n_basis)
+  penalty_matrix_23 <- diag(n_basis)
+
+  # Create full model data with only case_1 populated
+  full_model_data <- list(
+    case_1 = case_1_data,
+    penalty_matrix_12 = penalty_matrix_12,
+    penalty_matrix_13 = penalty_matrix_13,
+    penalty_matrix_23 = penalty_matrix_23
+  )
+
+  md_ptr <- create_penlik_model_data(full_model_data)
+  log_lik_cpp <- calc_log_likelihood(md_ptr, theta_12, theta_13, theta_23)
 
   # Analytical formula for constant hazards
   # L = exp(A12(V_0) + A13(V_0)) *
@@ -384,8 +382,8 @@ test_that("calc_case_2_log_likelihood works with constant hazard rates", {
   theta_13 <- fit_constant_hazard(fit_spline_13, fit_times, alpha_13)
   theta_23 <- fit_constant_hazard(fit_spline_23, fit_times, alpha_23)
 
-  # Create model data
-  model_data <- list(
+  # Create case_2 specific model data
+  case_2_data <- list(
     V_healthy_i_spline_mat_12 = spline_V_healthy_12$i_spline,
     V_healthy_i_spline_mat_13 = spline_V_healthy_13$i_spline,
 
@@ -400,31 +398,33 @@ test_that("calc_case_2_log_likelihood works with constant hazard rates", {
     grid_T_obs_i_spline_mat_13 = spline_grid_T_obs_13$i_spline,
     grid_T_obs_i_spline_mat_23 = spline_grid_T_obs_23$i_spline,
 
-    grid_V_ill_i_spline_mat_12 = spline_grid_V_ill_12$i_spline,
-    grid_V_ill_i_spline_mat_13 = spline_grid_V_ill_13$i_spline,
-    grid_V_ill_i_spline_mat_23 = spline_grid_V_ill_23$i_spline,
+    grid_T_obs_m_spline_mat_12 = spline_grid_T_obs_12$m_spline,
 
-    T_obs_m_spline_mat_12 = spline_T_obs_12$m_spline,
     T_obs_m_spline_mat_13 = spline_T_obs_13$m_spline,
     T_obs_m_spline_mat_23 = spline_T_obs_23$m_spline,
 
     dx_grid_T_obs = dx_grid_T_obs,
-    dx_grid_V_ill = dx_grid_V_ill,
-
-    grid_T_obs_m_spline_mat_12 = spline_grid_T_obs_12$m_spline,
-    grid_T_obs_m_spline_mat_13 = spline_grid_T_obs_13$m_spline,
-    grid_T_obs_m_spline_mat_23 = spline_grid_T_obs_23$m_spline,
-
-    grid_V_ill_m_spline_mat_12 = spline_grid_V_ill_12$m_spline,
-    grid_V_ill_m_spline_mat_13 = spline_grid_V_ill_13$m_spline,
-    grid_V_ill_m_spline_mat_23 = spline_grid_V_ill_23$m_spline,
 
     T_obs_values = T_obs,
     V_healthy_values = V_healthy
   )
 
-  md_ptr <- create_penlik_model_data(model_data)
-  log_lik_cpp <- calc_case_2_log_likelihood(md_ptr, theta_12, theta_13, theta_23)
+  # Create dummy penalty matrices (for full model structure)
+  n_basis <- ncol(spline_T_obs_12$i_spline)
+  penalty_matrix_12 <- diag(n_basis)
+  penalty_matrix_13 <- diag(n_basis)
+  penalty_matrix_23 <- diag(n_basis)
+
+  # Create full model data with only case_2 populated
+  full_model_data <- list(
+    case_2 = case_2_data,
+    penalty_matrix_12 = penalty_matrix_12,
+    penalty_matrix_13 = penalty_matrix_13,
+    penalty_matrix_23 = penalty_matrix_23
+  )
+
+  md_ptr <- create_penlik_model_data(full_model_data)
+  log_lik_cpp <- calc_log_likelihood(md_ptr, theta_12, theta_13, theta_23)
 
   # Calculate in R for comparison
   A12_V_0 <- spline_V_0_12$i_spline %*% theta_12
@@ -541,15 +541,10 @@ test_that("calc_case_3_log_likelihood works with constant hazard rates", {
   theta_13 <- fit_constant_hazard(fit_spline_13, fit_times, alpha_13)
   theta_23 <- fit_constant_hazard(fit_spline_23, fit_times, alpha_23)
 
-  # Create model data
-  model_data <- list(
+  # Create case_3 specific model data
+  case_3_data <- list(
     V_healthy_i_spline_mat_12 = spline_V_healthy_12$i_spline,
     V_healthy_i_spline_mat_13 = spline_V_healthy_13$i_spline,
-
-    V_ill_i_spline_mat_12 = spline_V_ill_12$i_spline,
-    V_ill_i_spline_mat_13 = spline_V_ill_13$i_spline,
-    V_ill_i_spline_mat_23 = spline_V_ill_23$i_spline,
-    V_ill_values = V_ill,
 
     T_obs_i_spline_mat_12 = spline_T_obs_12$i_spline,
     T_obs_i_spline_mat_13 = spline_T_obs_13$i_spline,
@@ -558,35 +553,36 @@ test_that("calc_case_3_log_likelihood works with constant hazard rates", {
     V_0_i_spline_mat_12 = spline_V_0_12$i_spline,
     V_0_i_spline_mat_13 = spline_V_0_13$i_spline,
 
-    grid_T_obs_i_spline_mat_12 = spline_grid_T_obs_12$i_spline,
-    grid_T_obs_i_spline_mat_13 = spline_grid_T_obs_13$i_spline,
-    grid_T_obs_i_spline_mat_23 = spline_grid_T_obs_23$i_spline,
-
     grid_V_ill_i_spline_mat_12 = spline_grid_V_ill_12$i_spline,
     grid_V_ill_i_spline_mat_13 = spline_grid_V_ill_13$i_spline,
     grid_V_ill_i_spline_mat_23 = spline_grid_V_ill_23$i_spline,
 
-    T_obs_m_spline_mat_12 = spline_T_obs_12$m_spline,
-    T_obs_m_spline_mat_13 = spline_T_obs_13$m_spline,
-    T_obs_m_spline_mat_23 = spline_T_obs_23$m_spline,
+    grid_V_ill_m_spline_mat_12 = spline_grid_V_ill_12$m_spline,
 
-    dx_grid_T_obs = dx_grid_T_obs,
     dx_grid_V_ill = dx_grid_V_ill,
 
-    grid_T_obs_m_spline_mat_12 = spline_grid_T_obs_12$m_spline,
-    grid_T_obs_m_spline_mat_13 = spline_grid_T_obs_13$m_spline,
-    grid_T_obs_m_spline_mat_23 = spline_grid_T_obs_23$m_spline,
-
-    grid_V_ill_m_spline_mat_12 = spline_grid_V_ill_12$m_spline,
-    grid_V_ill_m_spline_mat_13 = spline_grid_V_ill_13$m_spline,
-    grid_V_ill_m_spline_mat_23 = spline_grid_V_ill_23$m_spline,
+    V_ill_values = V_ill,
 
     T_obs_values = T_obs,
     V_healthy_values = V_healthy
   )
 
-  md_ptr <- create_penlik_model_data(model_data)
-  log_lik_cpp <- calc_case_3_log_likelihood(md_ptr, theta_12, theta_13, theta_23)
+  # Create dummy penalty matrices (for full model structure)
+  n_basis <- ncol(spline_T_obs_12$i_spline)
+  penalty_matrix_12 <- diag(n_basis)
+  penalty_matrix_13 <- diag(n_basis)
+  penalty_matrix_23 <- diag(n_basis)
+
+  # Create full model data with only case_3 populated
+  full_model_data <- list(
+    case_3 = case_3_data,
+    penalty_matrix_12 = penalty_matrix_12,
+    penalty_matrix_13 = penalty_matrix_13,
+    penalty_matrix_23 = penalty_matrix_23
+  )
+
+  md_ptr <- create_penlik_model_data(full_model_data)
+  log_lik_cpp <- calc_log_likelihood(md_ptr, theta_12, theta_13, theta_23)
 
   # Calculate in R for comparison
   # L = exp(A12(V_0) + A13(V_0)) * exp(-A23(T)) *
@@ -700,15 +696,10 @@ test_that("calc_case_4_log_likelihood works with constant hazard rates", {
   theta_13 <- fit_constant_hazard(fit_spline_13, fit_times, alpha_13)
   theta_23 <- fit_constant_hazard(fit_spline_23, fit_times, alpha_23)
 
-  # Create model data
-  model_data <- list(
+  # Create case_4 specific model data
+  case_4_data <- list(
     V_healthy_i_spline_mat_12 = spline_V_healthy_12$i_spline,
     V_healthy_i_spline_mat_13 = spline_V_healthy_13$i_spline,
-
-    V_ill_i_spline_mat_12 = spline_V_ill_12$i_spline,
-    V_ill_i_spline_mat_13 = spline_V_ill_13$i_spline,
-    V_ill_i_spline_mat_23 = spline_V_ill_23$i_spline,
-    V_ill_values = V_ill,
 
     T_obs_i_spline_mat_12 = spline_T_obs_12$i_spline,
     T_obs_i_spline_mat_13 = spline_T_obs_13$i_spline,
@@ -717,35 +708,38 @@ test_that("calc_case_4_log_likelihood works with constant hazard rates", {
     V_0_i_spline_mat_12 = spline_V_0_12$i_spline,
     V_0_i_spline_mat_13 = spline_V_0_13$i_spline,
 
-    grid_T_obs_i_spline_mat_12 = spline_grid_T_obs_12$i_spline,
-    grid_T_obs_i_spline_mat_13 = spline_grid_T_obs_13$i_spline,
-    grid_T_obs_i_spline_mat_23 = spline_grid_T_obs_23$i_spline,
-
     grid_V_ill_i_spline_mat_12 = spline_grid_V_ill_12$i_spline,
     grid_V_ill_i_spline_mat_13 = spline_grid_V_ill_13$i_spline,
     grid_V_ill_i_spline_mat_23 = spline_grid_V_ill_23$i_spline,
 
-    T_obs_m_spline_mat_12 = spline_T_obs_12$m_spline,
-    T_obs_m_spline_mat_13 = spline_T_obs_13$m_spline,
+    grid_V_ill_m_spline_mat_12 = spline_grid_V_ill_12$m_spline,
+
     T_obs_m_spline_mat_23 = spline_T_obs_23$m_spline,
 
-    dx_grid_T_obs = dx_grid_T_obs,
     dx_grid_V_ill = dx_grid_V_ill,
 
-    grid_T_obs_m_spline_mat_12 = spline_grid_T_obs_12$m_spline,
-    grid_T_obs_m_spline_mat_13 = spline_grid_T_obs_13$m_spline,
-    grid_T_obs_m_spline_mat_23 = spline_grid_T_obs_23$m_spline,
-
-    grid_V_ill_m_spline_mat_12 = spline_grid_V_ill_12$m_spline,
-    grid_V_ill_m_spline_mat_13 = spline_grid_V_ill_13$m_spline,
-    grid_V_ill_m_spline_mat_23 = spline_grid_V_ill_23$m_spline,
+    V_ill_values = V_ill,
 
     T_obs_values = T_obs,
     V_healthy_values = V_healthy
   )
 
-  md_ptr <- create_penlik_model_data(model_data)
-  log_lik_cpp <- calc_case_4_log_likelihood(md_ptr, theta_12, theta_13, theta_23)
+  # Create dummy penalty matrices (for full model structure)
+  n_basis <- ncol(spline_T_obs_12$i_spline)
+  penalty_matrix_12 <- diag(n_basis)
+  penalty_matrix_13 <- diag(n_basis)
+  penalty_matrix_23 <- diag(n_basis)
+
+  # Create full model data with only case_4 populated
+  full_model_data <- list(
+    case_4 = case_4_data,
+    penalty_matrix_12 = penalty_matrix_12,
+    penalty_matrix_13 = penalty_matrix_13,
+    penalty_matrix_23 = penalty_matrix_23
+  )
+
+  md_ptr <- create_penlik_model_data(full_model_data)
+  log_lik_cpp <- calc_log_likelihood(md_ptr, theta_12, theta_13, theta_23)
 
   # Calculate in R for comparison
   # L = exp(A12(V_0) + A13(V_0)) * exp(-A23(T)) * α23(T) *

@@ -9,27 +9,19 @@ em_fit <- function(md_ptr, z_init = NULL, lambda_init = NULL, max_iter = 100L, t
     .Call(`_idmEstimation_em_fit`, md_ptr, z_init, lambda_init, max_iter, tol, verbose)
 }
 
-create_penlik_model_data <- function(x) {
-    .Call(`_idmEstimation_create_penlik_model_data`, x)
+create_penlik_model_data <- function(data) {
+    .Call(`_idmEstimation_create_penlik_model_data`, data)
 }
 
-calc_case_1_log_likelihood <- function(md_ptr_case_1, theta_12, theta_13, theta_23) {
-    .Call(`_idmEstimation_calc_case_1_log_likelihood`, md_ptr_case_1, theta_12, theta_13, theta_23)
+calc_log_likelihood <- function(md_ptr, theta_12, theta_13, theta_23) {
+    .Call(`_idmEstimation_calc_log_likelihood`, md_ptr, theta_12, theta_13, theta_23)
 }
 
-calc_case_2_log_likelihood <- function(md_ptr_case_2, theta_12, theta_13, theta_23) {
-    .Call(`_idmEstimation_calc_case_2_log_likelihood`, md_ptr_case_2, theta_12, theta_13, theta_23)
+calc_full_penalty <- function(md_ptr, theta_12, theta_13, theta_23, kappa_12, kappa_13, kappa_23) {
+    .Call(`_idmEstimation_calc_full_penalty`, md_ptr, theta_12, theta_13, theta_23, kappa_12, kappa_13, kappa_23)
 }
 
-calc_case_3_log_likelihood <- function(md_ptr_case_3, theta_12, theta_13, theta_23) {
-    .Call(`_idmEstimation_calc_case_3_log_likelihood`, md_ptr_case_3, theta_12, theta_13, theta_23)
-}
-
-calc_case_4_log_likelihood <- function(md_ptr_case_4, theta_12, theta_13, theta_23) {
-    .Call(`_idmEstimation_calc_case_4_log_likelihood`, md_ptr_case_4, theta_12, theta_13, theta_23)
-}
-
-calc_penlik_log_likelihood <- function(md_ptr_case_1, md_ptr_case_2, md_ptr_case_3, md_ptr_case_4, theta_12, theta_13, theta_23) {
-    .Call(`_idmEstimation_calc_penlik_log_likelihood`, md_ptr_case_1, md_ptr_case_2, md_ptr_case_3, md_ptr_case_4, theta_12, theta_13, theta_23)
+calc_penalized_log_likelihood <- function(md_ptr, theta_12, theta_13, theta_23, kappa_12, kappa_13, kappa_23) {
+    .Call(`_idmEstimation_calc_penalized_log_likelihood`, md_ptr, theta_12, theta_13, theta_23, kappa_12, kappa_13, kappa_23)
 }
 

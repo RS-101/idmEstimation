@@ -22,9 +22,7 @@ Imports:
     Rcpp (>= 1.1.0)
 LinkingTo: 
     Rcpp,
-    RcppArmadillo,
-    RcppEigen,
-    RcppNumerical
+    RcppArmadillo
 RoxygenNote: 7.3.3
 Suggests: 
     testthat (>= 3.0.0)

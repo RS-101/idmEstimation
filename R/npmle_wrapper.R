@@ -1,4 +1,4 @@
-data_to_list_format <- function(data) {
+data_to_list_format <- function(data, is_equal_tol = 1e-8) {
 
   intersect.interval <- function(x, y) {
     if (inherits(y, "interval") & inherits(x, "numeric")) {
@@ -97,48 +97,58 @@ data_to_list_format <- function(data) {
 
   to_mat <- function(x) if (is.matrix(x)) x else as.matrix(unclass(x))
 
-  data <- as.data.table(data)
-  if(isFALSE("id" %in% names(data))) {data[, id:= .I]}
 
-  stopifnot(all(sort(names(data)) == sort(c("id", "V_0", "V_healthy",
-                                            "V_ill", "T_obs", "status"))))
-  # case 1
-  case_1 <- data[as.integer(status) == 1]
-  case_1_exact <- case_1[V_healthy == T_obs]
+  # check if data has correct columns
+  required_cols <- c("id", "T_obs", "V_healthy", "V_ill", "status_dead", "status_ill")
+  missing_cols <- setdiff(required_cols, names(data))
+  if(length(missing_cols) > 0) {
+    stop(paste("Data is missing required columns:", paste(missing_cols, collapse = ", ")))
+  }
 
-  J <- case_1_exact[,.N]
-  s_j <- case_1_exact$T_obs
+  # Create logical index vectors for each observation type
+  is_ill <- data$status_ill == 1
+  is_dead <- data$status_dead == 1
+  is_T_eq_Vhealthy <- abs(data$T_obs - data$V_healthy) < is_equal_tol
+  is_T_gt_Vhealthy <- abs(data$T_obs - data$V_healthy) > is_equal_tol
 
+  # M observations with interval censored times of 1 → 2 transition:
+  idx_M <- is_ill
+  M <- sum(idx_M)
+  L_m <- data$V_healthy[idx_M]
+  R_m <- data$V_ill[idx_M]
+  t_m <- data$T_obs[idx_M]
 
-  case_1_rest <- case_1[!(V_healthy == T_obs)]
-  C <- case_1_rest[,.N]
-  L_c <- case_1_rest$V_healthy
-  t_c <- case_1_rest$T_obs
+  stopifnot(all(L_m < R_m))
 
-  # case 2
-  case_2 <- data[as.integer(status) == 2]
-  case_2_exact <- case_2[V_healthy == T_obs]
-  K_tilde <- case_2_exact[,.N]
-  e_k <- case_2_exact$T_obs
+  # N_tilde of M also make a transition to state 3: t_m_in_N_tilde ⊆ t_m
+  idx_N_tilde <- is_ill & is_dead
+  N_tilde <- sum(idx_N_tilde)
+  t_m_in_N_tilde <- data$T_obs[idx_N_tilde]
 
-  case_2_rest <- case_2[!(V_healthy == T_obs)]
-  U <- case_2_rest[,.N]
-  L_u <- case_2_rest$V_healthy
-  t_u <- case_2_rest$T_obs
+  stopifnot(N_tilde < M)
 
-  # case 4
-  case_4 <- data[as.integer(status) == 4]
-  N_tilde <- case_4[,.N]
-  t_m_in_N_tilde <- case_4$T_obs
+  # K_tilde observations with direct transition 1 → 3, no missing transitions T_obs = V_healthy:
+  idx_K_tilde <- !is_ill & is_dead & is_T_eq_Vhealthy
+  K_tilde <- sum(idx_K_tilde)
+  e_k <- data$T_obs[idx_K_tilde]
 
-  # case 3
-  case_3 <- data[as.integer(status) == 3]
-  case_3_4 <- data[as.integer(status) %in% c(3,4)]
-  M <- case_3_4[,.N]
+  # J observations censored in state 1, no missing transitions T_obs = V_healthy:
+  idx_J <- !is_dead & !is_ill & is_T_eq_Vhealthy
+  J <- sum(idx_J)
+  s_j <- data$T_obs[idx_J]
 
-  L_m <- case_3_4$V_healthy
-  R_m <- case_3_4$V_ill
-  t_m <- case_3_4$T_obs
+  # U observations, last seen in state 1 and then seen in state 3:
+  idx_U <- !is_ill & is_dead & is_T_gt_Vhealthy
+  U <- sum(idx_U)
+  L_u <- data$V_healthy[idx_U]
+  t_u <- data$T_obs[idx_U]
+
+  # C observations, last seen in state 1 and then censored:
+  idx_C <- !is_ill & !is_dead & is_T_gt_Vhealthy
+  C <- sum(idx_C)
+  L_c <- data$V_healthy[idx_C]
+  t_c <- data$T_obs[idx_C]
+
 
   ##### K: E* - Obs and potential 1 -> 3 ####
   E_star <- unique(c(e_k, t_u))
@@ -249,33 +259,6 @@ data_to_list_format <- function(data) {
     full_A_m = to_mat(full_A_m), Q_i = to_mat(Q_i)
   )
 
-  if(add_r_format) {
-    return(list(cpp_data = data_list,
-                r_data = list(
-                  Q_full   = Q_full,
-                  s_j_full = s_j_full,
-                  Q_i      = Q_i,
-                  full_A_m = full_A_m,
-                  A_m      = A_m,
-                  A_u      = A_u,
-                  A_c      = A_c,
-                  t_star_n   = t_star_n,
-                  E_star   = E_star,
-                  t_m      = t_m,
-                  t_u      = t_u,
-                  t_c      = t_c,
-                  N_star   = N_star,
-                  d_n      = d_n,
-                  c_k      = c_k,
-                  I_mark   = I_mark,
-                  J        = J,
-                  M        = M,
-                  W        = W,
-                  K_tilde  = K_tilde,
-                  N1_obs_of_T_star = N1_obs_of_T_star
-                )))
-  }
-
   data_list
 }
 
@@ -323,29 +306,26 @@ find_estimator_from_z_and_lambda <- function(grid_points, z_i, lambda_n, Q_i, Q_
     approxfun(x, y, method = "constant", f = f, rule = rule)
   }
 
+  hazards_as_functions <- list(
+    A12  = stepify(grid_points, A12, side = "left"),
+    A13  = stepify(grid_points, A13, side = "left"),
+    A23  = stepify(grid_points, A23, side = "left")
+  )
+  class(hazards_as_functions) <- c("idm_hazards", class(hazards_as_functions))
+
+
   list(
-    as_functions = list(
-      F12       = stepify(grid_points, F12, side = "left"),
-      F13       = stepify(grid_points, F13, side = "left"),
-      F         = stepify(grid_points, F_total, side = "left"),
-      Lambda12  = stepify(grid_points, A12, side = "left"),
-      Lambda13  = stepify(grid_points, A13, side = "left"),
-      Lambda23  = stepify(grid_points, A23, side = "left")
-    ),
-    as_points = list(
-      grid_points = grid_points,
-      F12 = F12,
-      F13 = F13,
-      F = F_total,
-      Lambda12 = A12,
-      Lambda13 = A13,
-      Lambda23 = A23
-    ))
+    distributions_as_functions = list(
+      F12 = stepify(grid_points, F12, side = "left"),
+      F13 = stepify(grid_points, F13, side = "left"),
+      F = stepify(grid_points, F_total, side = "left")),
+    hazards_as_functions = hazards_as_functions
+  )
 }
 
 fit_npmle <- function(data,
                       max_iter = 200,
-                      tol = 1e-8,
+                      tol = 1e-4,
                       verbose = FALSE) {
 
 
@@ -376,8 +356,8 @@ fit_npmle <- function(data,
   )
 
   list(
-    estimators = estimators$as_functions,
-    estimators_point = estimators$as_points,
+    hazards = estimators$hazards_as_functions,
+    distributions_functions = estimators$distributions_as_functions,
     raw_estimators = list(
       z_i = fit$z_i,
       lambda = fit$lambda_n
