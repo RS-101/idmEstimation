@@ -316,7 +316,7 @@ setup_cpp_model <- function(V_0,
 
 
 #### Fit ####
-max_pen_likelihood <- function(model_config, kappa_12, kappa_13, kappa_23) {
+max_pen_likelihood <- function(model_config, kappa_12, kappa_13, kappa_23, long_theta_0 = NULL) {
   n_theta_12 <- model_config$n_theta_12
   n_theta_13 <- model_config$n_theta_13
   n_theta_23 <- model_config$n_theta_23
@@ -324,7 +324,8 @@ max_pen_likelihood <- function(model_config, kappa_12, kappa_13, kappa_23) {
   n_theta <- n_theta_12 + n_theta_13 + n_theta_23
 
   obj_fun <- function(long_theta) {
-    calc_penalized_log_likelihood(
+
+    res <- calc_penalized_log_likelihood(
       model_config$model_pointer,
       long_theta[1:n_theta_12],
       long_theta[(n_theta_12 + 1):(n_theta_12 + n_theta_13)],
@@ -333,13 +334,21 @@ max_pen_likelihood <- function(model_config, kappa_12, kappa_13, kappa_23) {
       kappa_13,
       kappa_23
     )$penalized_log_likelihood
+
+    if (!is.finite(res)) return(1e10)
+    -res
+  }
+
+
+  if(is.null(long_theta_0)) {
+    long_theta_0 <- rep(0.5, n_theta)
   }
 
   res <- optim(
-    par = rep(0.1, n_theta),
+    par = long_theta_0,
     fn = obj_fun,
-    control = list(fnscale = -1, maxit = 500)
-  )
+    method= "L-BFGS-B",
+    lower = 0)
 
   theta_hat <- list(
     theta_12 = res$par[1:n_theta_12],
@@ -369,6 +378,71 @@ max_pen_likelihood <- function(model_config, kappa_12, kappa_13, kappa_23) {
     convergence = res$convergence
   )
 }
+
+
+max_pen_likelihood_unconstrained <- function(model_config, kappa_12, kappa_13, kappa_23, long_theta_0 = NULL) {
+  n_theta_12 <- model_config$n_theta_12
+  n_theta_13 <- model_config$n_theta_13
+  n_theta_23 <- model_config$n_theta_23
+
+  n_theta <- n_theta_12 + n_theta_13 + n_theta_23
+
+  obj_fun <- function(long_theta) {
+    long_theta <- exp(long_theta)
+
+    -calc_penalized_log_likelihood(
+      model_config$model_pointer,
+      long_theta[1:n_theta_12],
+      long_theta[(n_theta_12 + 1):(n_theta_12 + n_theta_13)],
+      long_theta[(n_theta_12 + n_theta_13 + 1):n_theta],
+      kappa_12,
+      kappa_13,
+      kappa_23
+    )$penalized_log_likelihood
+  }
+
+
+  if(is.null(long_theta_0)) {
+    long_theta_0 <- rep(-1, n_theta)
+  }
+
+  res <- optim(
+    par = long_theta_0,
+    fn = obj_fun,
+    method= "BFGS"
+  )
+
+  res$par <- exp(res$par)
+
+  theta_hat <- list(
+    theta_12 = res$par[1:n_theta_12],
+    theta_13 = res$par[(n_theta_12 + 1):(n_theta_12 + n_theta_13)],
+    theta_23 = res$par[(n_theta_12 + n_theta_13 + 1):n_theta]
+  )
+
+  pl_at_theta_hat <- calc_penalized_log_likelihood(
+    model_config$model_pointer,
+    theta_hat$theta_12,
+    theta_hat$theta_13,
+    theta_hat$theta_23,
+    kappa_12,
+    kappa_13,
+    kappa_23
+  )
+
+  list(
+    theta_hat = theta_hat,
+    model_config = model_config,
+    kappa_12 = kappa_12,
+    kappa_13 = kappa_13,
+    kappa_23 = kappa_23,
+    log_likelihood = pl_at_theta_hat$log_likelihood,
+    penalized_log_likelihood = pl_at_theta_hat$penalized_log_likelihood,
+    penalty = pl_at_theta_hat$penalty,
+    convergence = res$convergence
+  )
+}
+
 
 safe_solve <- function(H_pl, H_ll, ridge_start = 0, tol = 1e-8, max_iter = 8) {
   # Ensure symmetry (Hessians should be symmetric, but numerics can drift)

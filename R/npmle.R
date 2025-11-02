@@ -258,7 +258,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     A_m = to_mat(A_m), A_u = to_mat(A_u), A_c = to_mat(A_c),
     full_A_m = to_mat(full_A_m), Q_i = to_mat(Q_i)
   )
-
+  
   data_list
 }
 
