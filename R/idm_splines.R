@@ -224,6 +224,7 @@ setup_cpp_model <- function(V_0,
                             T_obs,
                             status_dead,
                             status_ill,
+                            n_knots = 7,
                             knots_12 = NULL,
                             knots_13 = NULL,
                             knots_23 = NULL,
@@ -231,13 +232,13 @@ setup_cpp_model <- function(V_0,
 
   # Set default knots if not provided
   if (is.null(knots_12)) {
-    knots_12 <- seq(min(V_0), max(T_obs), length.out = 10)
+    knots_12 <- seq(min(V_0), max(T_obs), length.out = n_knots)
   }
   if (is.null(knots_13)) {
-    knots_13 <- seq(min(V_0), max(T_obs), length.out = 10)
+    knots_13 <- seq(min(V_0), max(T_obs), length.out = n_knots)
   }
   if (is.null(knots_23)) {
-    knots_23 <- seq(min(V_0), max(T_obs), length.out = 10)
+    knots_23 <- seq(min(V_0), max(T_obs), length.out = n_knots)
   }
 
   n_theta_12 <- length(knots_12) + degree - 1
@@ -313,6 +314,8 @@ setup_cpp_model <- function(V_0,
         n_theta_23 = n_theta_23)
 }
 
+
+#### Fit ####
 max_pen_likelihood <- function(model_config, kappa_12, kappa_13, kappa_23) {
   n_theta_12 <- model_config$n_theta_12
   n_theta_13 <- model_config$n_theta_13
@@ -477,28 +480,32 @@ create_hazards <- function(model_config, fit) {
   hazards
 }
 
-
-fit_idm <- function(V_0,
-                    V_healthy,
-                    V_ill,
-                    T_obs,
-                    status_dead,
-                    status_ill,
+fit_idm <- function(data,
                     knots_12 = NULL,
                     knots_13 = NULL,
                     knots_23 = NULL,
                     degree = 3,
+                    n_knots = 7,
                     kappa_values = NULL,
                     verbose = TRUE) {
 
+
+  # verify data components
+  stopifnot(all(c("V_0", "V_healthy", "V_ill", "T_obs", "status_dead", "status_ill") %in% names(data)))
+
+  V_0 <- data$V_0
+  V_healthy <- data$V_healthy
+  V_ill <- data$V_ill
+  T_obs <- data$T_obs
+  status_dead <- data$status_dead
+  status_ill <- data$status_ill
+
   # Setup model configuration
   model_config <- setup_cpp_model(
-    V_0, V_healthy, V_ill, T_obs,
-    status_dead, status_ill,
-    knots_12, knots_13, knots_23, degree
+   V_0 = V_0, V_healthy = V_healthy, V_ill = V_ill, T_obs = T_obs,
+    status_dead = status_dead, status_ill = status_ill, n_knots = n_knots,
+    knots_12 = knots_12, knots_13 = knots_13, knots_23 = knots_23, degree = degree
   )
-
-
 
 
   if (is.null(kappa_values)) {
@@ -538,32 +545,29 @@ fit_idm <- function(V_0,
   }
 
   best <- which.max(cvs)
-
-  list(
-    best_fit = fits[[best]],
-    best_kappa = c(
-      kappa_12 = kappa_grid$kappa_12[best],
-      kappa_13 = kappa_grid$kappa_13[best],
-      kappa_23 = kappa_grid$kappa_23[best]
-    ),
-    best_cv = cvs[best],
-    all_fits = fits,
-    all_cvs = cvs,
-    kappa_grid = kappa_grid,
-    model_config = model_config
+  final_kappas <- c(
+    kappa_12 = kappa_grid$kappa_12[best],
+    kappa_13 = kappa_grid$kappa_13[best],
+    kappa_23 = kappa_grid$kappa_23[best]
   )
+  final_fit <- fits[[best]]
+  final_cv <- final_fit
+  hazards <- create_hazards(model_config, final_fit)
+
+  return(list(
+        hazards = hazards,
+        kappas = final_kappas,
+        fit = final_fit,
+        cv_value = final_cv$approx_cv_value,
+        model_config = model_config
+    ))
 }
 
 
 
 
 
-fit_idm_greedy <- function(V_0,
-                    V_healthy,
-                    V_ill,
-                    T_obs,
-                    status_dead,
-                    status_ill,
+fit_idm_greedy <- function(data,
                     knots_12 = NULL,
                     knots_13 = NULL,
                     knots_23 = NULL,
@@ -571,6 +575,17 @@ fit_idm_greedy <- function(V_0,
                     max_iter = 2,
                     degree = 3,
                     verbose = TRUE) {
+
+  # verify data components
+  stopifnot(all(c("V_0", "V_healthy", "V_ill", "T_obs", "status_dead", "status_ill") %in% names(data)))
+
+  V_0 <- data$V_0
+  V_healthy <- data$V_healthy
+  V_ill <- data$V_ill
+  T_obs <- data$T_obs
+  status_dead <- data$status_dead
+  status_ill <- data$status_ill
+
 
   # Setup model configuration
   model_config <- setup_cpp_model(
@@ -703,6 +718,8 @@ fit_idm_greedy <- function(V_0,
     final_fit <- max_pen_likelihood(model_config, final_kappas[1], final_kappas[2], final_kappas[3])
     final_cv <- approx_cv(final_fit)
 
+
+    hazards <- create_hazards(model_config, final_fit)
 
     return(list(
         hazards = hazards,

@@ -223,139 +223,140 @@ add_interval_censoring_to_illness <- function(exact_idm, admin_cutoff, n_obs = 1
   list(obs = df_obs_idm, cens_mechanism = df_observation_scheme, exact_idm = exact_idm)
 }
 
-# add_interval_censoring_to_illness_extension <- function(
-#     dt,
-#     scenario = 1L,                # 1..4: visit grids & missingness per Frydman–Szarek
-#     study_end = 1460,             # days (≈ 4 years)
-#     obs_time_sd = 100,            # days; N(0, sd) jitter at each planned visit (except baseline)
-#     seed = NULL
-# ) {
-#   # Required columns
-#   stopifnot(all(c("entry2", "death_time") %in% names(dt)))
-#   n <- nrow(dt)
-#   time_to_illness <- as.numeric(dt$entry2)
-#   time_to_death   <- as.numeric(dt$death_time)
-#
-#   # ---- Scenario-specific visit schedule (in days)
-#   # Scen. 1 & 3: every 6 months; Scen. 2 & 4: 0, 2, 4, 6 months; then every 6m through 24m; then yearly
-#   six_months <- 182.5
-#   base_schedule <- switch(
-#     as.character(scenario),
-#     "1" = seq(0, study_end, by = six_months),
-#     "3" = seq(0, study_end, by = six_months),
-#     "2" = {
-#       v <- c(0, 60, 120, 180, 360, 540, 720, 1080, 1460)
-#       v[v <= study_end]
-#     },
-#     "4" = {
-#       v <- c(0, 60, 120, 180, 360, 540, 720, 1080, 1460)
-#       v[v <= study_end]
-#     },
-#     stop("scenario must be 1, 2, 3, or 4")
-#   )
-#   m <- length(base_schedule)
-#   if (m < 2) stop("Study end too short for any post-baseline visits.")
-#
-#   # ---- Build per-subject schedule with jitter; keep monotone and within [0, study_end]
-#   if (!is.null(seed)) set.seed(seed)
-#   obs_schedule <- matrix(rep(base_schedule, each = n), nrow = n, ncol = m)
-#   if (obs_time_sd > 0) {
-#     noise <- matrix(rnorm(n * (m - 1), mean = 0, sd = obs_time_sd), nrow = n, ncol = (m - 1))
-#     obs_schedule[, 2:m] <- obs_schedule[, 2:m] + noise
-#     obs_schedule[, 2:m] <- pmax(pmin(obs_schedule[, 2:m], study_end), 0)  # clamp
-#     # enforce increasing times row-wise; baseline fixed at 0
-#     obs_schedule <- t(apply(obs_schedule, 1, function(x) { x <- sort(x); x[1] <- 0; x }))
-#   }
-#
-#   # ---- Missingness of the intermediate status (illness) by assessment; baseline never missing
-#   # p1 = 0.5% in Scen. 1–2; p1 = 3% in Scen. 3–4; doubles each assessment; cap at 0.98.
-#   p1 <- if (scenario %in% c(1L, 2L)) 0.005 else 0.03
-#   miss_prob <- pmin(0.98, p1 * 2^(0:(m - 2)))     # length m-1 (post-baseline)
-#   miss_mat  <- matrix(runif(n * (m - 1)) < rep(miss_prob, each = n), nrow = n, ncol = (m - 1))
-#   missing_status <- cbind(rep(FALSE, n), miss_mat)  # include baseline (never missing)
-#
-#   # ---- Administrative end & death
-#   T_end <- pmin(time_to_death, study_end)
-#   died_by_end <- is.finite(time_to_death) & (time_to_death <= study_end)
-#
-#   # ---- Determine interval [V_healthy, V_ill] if illness occurs before end and before death
-#   V_0 <- rep(0, n)
-#   V_healthy <- rep(0, n)
-#   V_ill <- rep(NA_real_, n)
-#
-#   ill_before_end <- is.finite(time_to_illness) & (time_to_illness <= study_end) & (time_to_illness < time_to_death)
-#
-#   for (i in seq_len(n)) {
-#     t_vis  <- obs_schedule[i, ]
-#     known  <- (!missing_status[i, ]) & (t_vis <= (T_end[i] + 1e-12))
-#     known[1] <- TRUE  # baseline known
-#
-#     if (ill_before_end[i]) {
-#       idx_before <- which((t_vis < time_to_illness[i]) & known)
-#       j_star <- if (length(idx_before)) max(idx_before) else 1L
-#       idx_after <- which(seq_len(m) > j_star & known)
-#       if (length(idx_after)) {
-#         k <- min(idx_after)
-#         V_healthy[i] <- t_vis[j_star]
-#         V_ill[i]     <- t_vis[k]
-#       } else {
-#         # No known post-illness visit before T_end
-#         V_healthy[i] <- t_vis[j_star]
-#         V_ill[i]     <- NA_real_
-#       }
-#     } else {
-#       # No illness before end/death: last known healthy visit before T_end
-#       idx_known <- which(known & (t_vis <= (T_end[i] + 1e-12)))
-#       V_healthy[i] <- if (length(idx_known)) max(t_vis[idx_known]) else 0
-#       V_ill[i]     <- NA_real_
-#     }
-#   }
-#
-#   # ---- Status categories (as in your original)
-#   status <- integer(n)
-#   status[is.na(V_ill) & !died_by_end] <- 1L
-#   status[is.na(V_ill) &  died_by_end] <- 2L
-#   status[!is.na(V_ill) & !died_by_end] <- 3L
-#   status[!is.na(V_ill) &  died_by_end] <- 4L
-#
-#   # ---- Outputs
-#   obs_dt <- data.frame(
-#     V_0 = V_0,
-#     V_healthy = V_healthy,
-#     V_ill = V_ill,
-#     T_obs = T_end,
-#     status = factor(
-#       status, levels = 1:4,
-#       labels = c("healthy@admin_end (cens)",
-#                  "died@admin_end (no illness observed)",
-#                  "interval illness, alive@admin_end",
-#                  "interval illness, died@admin_end")
-#     )
-#   )
-#
-#   # keep schedules and missingness as list-cols
-#   schedule_list <- split(obs_schedule, row(obs_schedule))
-#   missing_list  <- split(missing_status, row(missing_status))
-#
-#   true_dt <- data.frame(
-#     scenario = scenario,
-#     obs_schedule = schedule_list,
-#     missing_status = missing_list,
-#     time_to_illness = time_to_illness,
-#     time_to_death = time_to_death,
-#     study_end = study_end,
-#     died_by_end = died_by_end,
-#     status = obs_dt$status
-#   )
-#
-#   structure(
-#     list(obs = obs_dt, true = true_dt),
-#     scenario = scenario,
-#     missing_p1 = p1,
-#     obs_time_sd = obs_time_sd,
-#     class = "fs_interval_obs"
-#   )
-# }
+add_censoring_frydman <- function(
+    exact_idm,
+    scenario = 1L,                # 1..4: visit grids & missingness per Frydman–Szarek
+    study_end = 1460,             # days (≈ 4 years)
+    obs_time_sd = 100,            # days; N(0, sd) jitter at each planned visit (except baseline)
+    seed = NULL
+) {
+
+  stopifnot("exact_idm" %in% class(exact_idm))
+
+  # Extract core times
+  id <- exact_idm$id
+  time_to_illness <- as.numeric(exact_idm$T_ill)
+  time_to_death   <- as.numeric(exact_idm$T_death)
+  n <- length(time_to_illness)
+
+  # ---- Scenario-specific visit schedule (in days)
+  # Scen. 1 & 3: every 6 months; Scen. 2 & 4: 0, 2, 4, 6 months; then every 6m through 24m; then yearly
+  six_months <- 182.5
+  base_schedule <- switch(
+    as.character(scenario),
+    "1" = seq(0, study_end, by = six_months),
+    "3" = seq(0, study_end, by = six_months),
+    "2" = {
+      v <- c(0, 60, 120, 180, 360, 540, 720, 1080, 1460)
+      v[v <= study_end]
+    },
+    "4" = {
+      v <- c(0, 60, 120, 180, 360, 540, 720, 1080, 1460)
+      v[v <= study_end]
+    },
+    stop("scenario must be 1, 2, 3, or 4")
+  )
+  m <- length(base_schedule)
+  if (m < 2) stop("Study end too short for any post-baseline visits.")
+
+  # ---- Build per-subject schedule with jitter; keep monotone and within [0, study_end]
+  if (!is.null(seed)) set.seed(seed)
+  obs_schedule <- matrix(rep(base_schedule, each = n), nrow = n, ncol = m)
+  if (obs_time_sd > 0) {
+    noise <- matrix(rnorm(n * (m - 1), mean = 0, sd = obs_time_sd), nrow = n, ncol = (m - 1))
+    obs_schedule[, 2:m] <- obs_schedule[, 2:m] + noise
+    obs_schedule[, 2:m] <- pmax(pmin(obs_schedule[, 2:m], study_end), 0)  # clamp
+    # enforce increasing times row-wise; baseline fixed at 0
+    obs_schedule <- t(apply(obs_schedule, 1, function(x) { x <- sort(x); x[1] <- 0; x }))
+  }
+
+  # ---- Missingness of the intermediate status (illness) by assessment; baseline never missing
+  # p1 = 0.5% in Scen. 1–2; p1 = 3% in Scen. 3–4; doubles each assessment; cap at 0.98.
+  p1 <- if (scenario %in% c(1L, 2L)) 0.005 else 0.03
+  miss_prob <- pmin(0.98, p1 * 2^(0:(m - 2)))     # length m-1 (post-baseline)
+  miss_mat  <- matrix(runif(n * (m - 1)) < rep(miss_prob, each = n), nrow = n, ncol = (m - 1))
+  missing_status <- cbind(rep(FALSE, n), miss_mat)  # include baseline (never missing)
+
+  # ---- Administrative end & death
+  T_end <- pmin(time_to_death, study_end)
+  died_by_end <- is.finite(time_to_death) & (time_to_death <= study_end)
+
+  # ---- Determine interval [V_healthy, V_ill] if illness occurs before end and before death
+  V_0 <- rep(0, n)
+  V_healthy <- rep(0, n)
+  V_ill <- rep(NA_real_, n)
+
+  ill_before_end <- is.finite(time_to_illness) & (time_to_illness <= study_end) & (time_to_illness < time_to_death)
+
+  for (i in seq_len(n)) {
+    t_vis  <- obs_schedule[i, ]
+    known  <- (!missing_status[i, ]) & (t_vis <= (T_end[i] + 1e-12))
+    known[1] <- TRUE  # baseline known
+
+    if (ill_before_end[i]) {
+      idx_before <- which((t_vis < time_to_illness[i]) & known)
+      j_star <- if (length(idx_before)) max(idx_before) else 1L
+      idx_after <- which(seq_len(m) > j_star & known)
+      if (length(idx_after)) {
+        k <- min(idx_after)
+        V_healthy[i] <- t_vis[j_star]
+        V_ill[i]     <- t_vis[k]
+      } else {
+        # No known post-illness visit before T_end
+        V_healthy[i] <- t_vis[j_star]
+        V_ill[i]     <- NA_real_
+      }
+    } else {
+      # No illness before end/death: last known healthy visit before T_end
+      idx_known <- which(known & (t_vis <= (T_end[i] + 1e-12)))
+      V_healthy[i] <- if (length(idx_known)) max(t_vis[idx_known]) else 0
+      V_ill[i]     <- NA_real_
+    }
+  }
+
+
+  has_interval   <- !is.na(V_ill)
+
+  status <- integer(n)
+  status[!has_interval & !died_by_end] <- 1
+  status[!has_interval &  died_by_end] <- 2
+  status[has_interval & !died_by_end] <- 3
+  status[has_interval &  died_by_end] <- 4
+
+
+  # Return
+  df_obs_idm <- data.frame(
+    id = id,
+    V_0 = V_0,
+    V_healthy = V_healthy,
+    V_ill = V_ill,
+    T_obs = T_end,
+    status_dead = as.numeric(died_by_end),
+    status_ill = as.numeric(has_interval),
+    case = factor(
+      status,
+      levels = 1:4,
+      labels = c("healthy@cutoff (cens)", "died@cutoff (no illness observed)",
+                 "interval illness, alive@cutoff", "interval illness, died@cutoff")
+    )
+  )
+
+
+  df_observation_scheme <- data.frame(
+    id = id,
+    obs_schedule = obs_schedule,
+    missing_status = missing_status
+  )
+
+  list(obs = df_obs_idm,
+   cens_mechanism = df_observation_scheme,
+    exact_idm = exact_idm, config = list(
+      scenario = scenario,
+      study_end = study_end,
+      obs_time_sd = obs_time_sd,
+      seed = seed
+    ))
+}
 
 simulate_idm <- function(n, a12, a13, a23, admin_cutoff = Inf) {
   res <- simulate_exact_idm(
@@ -365,7 +366,7 @@ simulate_idm <- function(n, a12, a13, a23, admin_cutoff = Inf) {
     a23 = a23,
   )
 
-  simulated_data <- add_interval_censoring_to_illness(res, admin_cutoff)
+  simulated_data <- add_censoring_frydman(res)
 
   hazards <- list(
     a12 = a12,
@@ -402,9 +403,9 @@ simulate_idm <- function(n, a12, a13, a23, admin_cutoff = Inf) {
 
 simulate_idm_constant_hazards <- function(
     n = 1000,
-    a12 = 0.1,
-    a13 = 0.2,
-    a23 = 0.3) {
+    a12 = 0.0008,
+    a13 = 0.0002,
+    a23 = 0.0016) {
 
   a12_const <- function(t) rep(a12, length(t))
   a13_const <- function(t) rep(a13, length(t))
