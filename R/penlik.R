@@ -232,13 +232,16 @@ setup_cpp_model <- function(V_0,
 
   # Set default knots if not provided
   if (is.null(knots_12)) {
-    knots_12 <- seq(min(V_0), max(T_obs), length.out = n_knots)
+    knots_12 <- seq(min(V_0, na.rm = T),
+                    max(V_ill, na.rm = T), length.out = n_knots)
   }
   if (is.null(knots_13)) {
-    knots_13 <- seq(min(V_0), max(T_obs), length.out = n_knots)
+    knots_13 <- seq(min(V_0, na.rm = T),
+                    max(T_obs, na.rm = T), length.out = n_knots)
   }
   if (is.null(knots_23)) {
-    knots_23 <- seq(min(V_0), max(T_obs), length.out = n_knots)
+    knots_23 <- seq(min(V_healthy, na.rm = T),
+                    max(T_obs, na.rm = T), length.out = n_knots)
   }
 
   n_theta_12 <- length(knots_12) + degree - 1
@@ -372,8 +375,8 @@ max_pen_likelihood <- function(model_config, kappa_12, kappa_13, kappa_23, long_
     kappa_12 = kappa_12,
     kappa_13 = kappa_13,
     kappa_23 = kappa_23,
-    log_likelihood = pl_at_theta_hat$log_likelihood,
-    penalized_log_likelihood = pl_at_theta_hat$penalized_log_likelihood,
+    log_likelihood = max(pl_at_theta_hat$log_likelihood, -1e10),
+    penalized_log_likelihood = max(pl_at_theta_hat$penalized_log_likelihood, -1e10),
     penalty = pl_at_theta_hat$penalty,
     convergence = res$convergence
   )
@@ -444,83 +447,84 @@ max_pen_likelihood_unconstrained <- function(model_config, kappa_12, kappa_13, k
 }
 
 
-safe_solve <- function(H_pl, H_ll, ridge_start = 0, tol = 1e-8, max_iter = 8) {
-  # Ensure symmetry (Hessians should be symmetric, but numerics can drift)
-  H <- (H_pl + t(H_pl)) / 2
 
-  # Scale for the ridge so lambda is magnitude-aware
-  sc <- mean(abs(diag(H)))
-  if (!is.finite(sc) || sc == 0) sc <- 1
 
-  # Try Cholesky with increasing ridge
-  lambda <- ridge_start
-  for (i in 0:max_iter) {
-    H_reg <- H + (lambda * sc + .Machine$double.eps) * diag(nrow(H))
-    R <- try(chol(H_reg), silent = TRUE)  # H_reg = t(R) %*% R
-    if (!inherits(R, "try-error")) {
-      # Solve H_reg X = H_ll via two triangular solves (no explicit inverse)
-      Y <- forwardsolve(t(R), H_ll)   # t(R) Y = H_ll
-      X <- backsolve(R, Y)            # R X = Y
-      return(list(X = X, method = "chol", lambda = lambda * sc, iters = i))
+
+approx_cv <- function(pl_optim) {
+
+  safe_solve <- function(H_pl, H_ll, ridge_start = 0, tol = 1e-8, max_iter = 8) {
+    # Ensure symmetry (Hessians should be symmetric, but numerics can drift)
+    H <- (H_pl + t(H_pl)) / 2
+
+    # Scale for the ridge so lambda is magnitude-aware
+    sc <- mean(abs(diag(H)))
+    if (!is.finite(sc) || sc == 0) sc <- 1
+
+    # Try Cholesky with increasing ridge
+    lambda <- ridge_start
+    for (i in 0:max_iter) {
+      H_reg <- H + (lambda * sc + .Machine$double.eps) * diag(nrow(H))
+      R <- try(chol(H_reg), silent = TRUE)  # H_reg = t(R) %*% R
+      if (!inherits(R, "try-error")) {
+        # Solve H_reg X = H_ll via two triangular solves (no explicit inverse)
+        Y <- forwardsolve(t(R), H_ll)   # t(R) Y = H_ll
+        X <- backsolve(R, Y)            # R X = Y
+        return(list(X = X, method = "chol", lambda = lambda * sc, iters = i))
+      }
+      lambda <- if (lambda == 0) tol else lambda * 10
     }
-    lambda <- if (lambda == 0) tol else lambda * 10
+
+    # Fallback: SVD pseudo-inverse with thresholding
+    sv <- svd(H)
+    thr <- max(tol, max(sv$d) * 1e-12)
+    d_inv <- ifelse(sv$d > thr, 1 / sv$d, 0)
+    X <- sv$v %*% (d_inv * t(sv$u) %*% H_ll)
+    list(X = X, method = "svd", lambda = lambda * sc, rank = sum(sv$d > thr))
   }
 
-  # Fallback: SVD pseudo-inverse with thresholding
-  sv <- svd(H)
-  thr <- max(tol, max(sv$d) * 1e-12)
-  d_inv <- ifelse(sv$d > thr, 1 / sv$d, 0)
-  X <- sv$v %*% (d_inv * t(sv$u) %*% H_ll)
-  list(X = X, method = "svd", lambda = lambda * sc, rank = sum(sv$d > thr))
-}
+  theta_hat <- pl_optim$theta_hat
+  ll_value <- pl_optim$log_likelihood
+  pl_value <- pl_optim$penalized_log_likelihood
 
+  if(abs(ll_value) > 1e9 | abs(pl_value) > 1e9){
+    return(-1e9)
+  }
 
-approx_cv <- function(fit_result) {
-  model_config <- fit_result$model_config
-  theta_hat <- fit_result$theta_hat
-  kappa_12 <- fit_result$kappa_12
-  kappa_13 <- fit_result$kappa_13
-  kappa_23 <- fit_result$kappa_23
-
-  n_theta_12 <- model_config$n_theta_12
-  n_theta_13 <- model_config$n_theta_13
-  n_theta_23 <- model_config$n_theta_23
+  model_pointer <- pl_optim$model_config$model_pointer
+  n_theta_12 <- pl_optim$model_config$n_theta_12
+  n_theta_13 <- pl_optim$model_config$n_theta_13
+  n_theta_23 <- pl_optim$model_config$n_theta_23
   n_theta <- n_theta_12 + n_theta_13 + n_theta_23
 
-  long_theta_hat <- c(theta_hat$theta_12, theta_hat$theta_13, theta_hat$theta_23)
 
-  calc_ll_in_long_theta <- function(long_theta) {
-    calc_log_likelihood(
-      model_config$model_pointer,
-      long_theta[1:n_theta_12],
-      long_theta[(n_theta_12 + 1):(n_theta_12 + n_theta_13)],
-      long_theta[(n_theta_12 + n_theta_13 + 1):n_theta]
-    )
+  ll_in_long_theta <- function(long_theta){
+    calc_log_likelihood(md_ptr = model_pointer,
+                        theta_12 = long_theta[1:n_theta_12],
+                        theta_13 = long_theta[(n_theta_12 + 1):(n_theta_12 + n_theta_13)],
+                        theta_23 = long_theta[(n_theta_12 + n_theta_13 + 1):n_theta])
   }
 
-  calc_pl_in_long_theta <- function(long_theta) {
-    calc_penalized_log_likelihood(
-      model_config$model_pointer,
-      long_theta[1:n_theta_12],
-      long_theta[(n_theta_12 + 1):(n_theta_12 + n_theta_13)],
-      long_theta[(n_theta_12 + n_theta_13 + 1):n_theta],
-      kappa_12,
-      kappa_13,
-      kappa_23
-    )$penalized_log_likelihood
+  pl_in_long_theta <- function(long_theta){
+    calc_penalized_log_likelihood(md_ptr = model_pointer,
+                        theta_12 = long_theta[1:n_theta_12],
+                        theta_13 = long_theta[(n_theta_12 + 1):(n_theta_12 + n_theta_13)],
+                        theta_23 = long_theta[(n_theta_12 + n_theta_13 + 1):n_theta],
+                        kappa_12 = pl_optim$kappa_12,
+                        kappa_13 = pl_optim$kappa_13,
+                        kappa_23 = pl_optim$kappa_23)$penalized_log_likelihood
   }
 
-  H_pl <- numDeriv::hessian(calc_pl_in_long_theta, long_theta_hat)
-  H_ll <- numDeriv::hessian(calc_ll_in_long_theta, long_theta_hat)
 
-  res <- safe_solve(H_pl, H_ll)
+  long_theta_hat <- unlist(theta_hat)
+
+  H_pl <- numDeriv::hessian(pl_in_long_theta, long_theta_hat)
+  H_ll  <- numDeriv::hessian(ll_in_long_theta, long_theta_hat)
+
+  res <- safe_solve(H_pl, H_ll) # solves H_pl X = H_ll
   tr_val <- sum(diag(res$X))
 
-  approx_cv_value <- fit_result$log_likelihood - tr_val
-
-  fit_result$approx_cv_value <- approx_cv_value
-  fit_result$trace_value <- tr_val
-  fit_result
+  approx_cv <- ll_value - tr_val
+  approx_cv
 }
 
 create_hazards <- function(model_config, fit) {
@@ -555,6 +559,7 @@ create_hazards <- function(model_config, fit) {
 }
 
 fit_idm <- function(data,
+                    run_in_parallel = TRUE,
                     knots_12 = NULL,
                     knots_13 = NULL,
                     knots_23 = NULL,
@@ -584,9 +589,9 @@ fit_idm <- function(data,
 
   if (is.null(kappa_values)) {
     kappa_grid <- expand.grid(
-      kappa_12 = 10^seq(-3, 3, length.out = 7),
-      kappa_13 = 10^seq(-3, 3, length.out = 7),
-      kappa_23 = 10^seq(-3, 3, length.out = 7)
+      kappa_12 = 10^seq(-2, 20, length.out = 9),
+      kappa_13 = 10^seq(-2, 20, length.out = 9),
+      kappa_23 = 10^seq(-2, 20, length.out = 9)
     )
   } else {
     kappa_grid <- as.data.frame(kappa_values)
@@ -599,22 +604,40 @@ fit_idm <- function(data,
   cvs <- numeric(n)
   fits <- vector("list", n)
 
-  for (i in seq_len(n)) {
-    kappa_12 <- kappa_grid$kappa_12[i]
-    kappa_13 <- kappa_grid$kappa_13[i]
-    kappa_23 <- kappa_grid$kappa_23[i]
+  if(run_in_parallel){
+    res <- parallel::mclapply(seq_len(n), function(i) {
+      kappa_12 <- kappa_grid$kappa_12[i]
+      kappa_13 <- kappa_grid$kappa_13[i]
+      kappa_23 <- kappa_grid$kappa_23[i]
 
-    fit <- max_pen_likelihood(model_config, kappa_12, kappa_13, kappa_23)
-    fit_cv <- approx_cv(fit)
+      fit <- max_pen_likelihood(model_config, kappa_12, kappa_13, kappa_23)
+      approx_cv_value <- approx_cv(fit)
 
-    fits[[i]] <- fit_cv
-    cvs[i] <- fit_cv$approx_cv_value
+      list(fit = fit, cv = approx_cv_value)
+    }, mc.cores = max(1, parallel::detectCores() - 1))
 
-    if (verbose) {
-      message(sprintf(
-        "[%d/%d] kappa=(%.2g, %.2g, %.2g)  cv=%.4f",
-        i, n, kappa_12, kappa_13, kappa_23, cvs[i]
-      ))
+    fits <- lapply(res, `[[`, "fit")
+    cvs  <- vapply(res, function(x) x$cv, numeric(1))
+
+
+  } else {
+    for (i in seq_len(n)) {
+      kappa_12 <- kappa_grid$kappa_12[i]
+      kappa_13 <- kappa_grid$kappa_13[i]
+      kappa_23 <- kappa_grid$kappa_23[i]
+
+      fit <- max_pen_likelihood(model_config, kappa_12, kappa_13, kappa_23)
+      approx_cv_value <- approx_cv(fit)
+
+      fits[[i]] <- fit
+      cvs[i] <- approx_cv_value
+
+      if (verbose) {
+        message(sprintf(
+          "[%d/%d] kappa=(%.2g, %.2g, %.2g)  cv=%.4f",
+          i, n, kappa_12, kappa_13, kappa_23, cvs[i]
+        ))
+      }
     }
   }
 
@@ -632,175 +655,8 @@ fit_idm <- function(data,
         hazards = hazards,
         kappas = final_kappas,
         fit = final_fit,
-        cv_value = final_cv$approx_cv_value,
-        model_config = model_config
-    ))
-}
-
-
-
-
-
-fit_idm_greedy <- function(data,
-                    knots_12 = NULL,
-                    knots_13 = NULL,
-                    knots_23 = NULL,
-                    initial_kappas = c(1,1,1),
-                    max_iter = 2,
-                    degree = 3,
-                    verbose = TRUE) {
-
-  # verify data components
-  stopifnot(all(c("V_0", "V_healthy", "V_ill", "T_obs", "status_dead", "status_ill") %in% names(data)))
-
-  V_0 <- data$V_0
-  V_healthy <- data$V_healthy
-  V_ill <- data$V_ill
-  T_obs <- data$T_obs
-  status_dead <- data$status_dead
-  status_ill <- data$status_ill
-
-
-  # Setup model configuration
-  model_config <- setup_cpp_model(
-    V_0, V_healthy, V_ill, T_obs,
-    status_dead, status_ill,
-    knots_12, knots_13, knots_23, degree
-  )
-
-
-    # Initialize log of kappas
-    b2 <- log(initial_kappas)
-
-    # For each of the 3 transitions (0→1, 0→2, 1→2)
-    for(iter in 1:max_iter) {
-        for(ii in 1:3) {
-            if(verbose) cat(sprintf("\nIteration %d, Parameter %d\n", iter, ii))
-
-            # Initial step size
-            uh <- 1.0
-
-            # Initialize search points
-            if(b2[ii] > 2.0) {
-                u <- c(
-                    b2[ii] - uh,  # u[1]
-                    b2[ii],       # u[2]
-                    b2[ii] + uh   # u[3]
-                )
-            } else {
-                u <- c(
-                    3.0 - uh,  # u[1]
-                    3.0,       # u[2]
-                    3.0 + uh   # u[3]
-                )
-            }
-
-            # Evaluate initial points
-            fu <- numeric(3)
-
-            # First point
-            b2[ii] <- u[1]
-            kappas <- exp(b2)
-            fit <- max_pen_likelihood(model_config, kappas[1], kappas[2], kappas[3])
-            fu[1] <- approx_cv(fit)$approx_cv_value
-
-            # Second point
-            b2[ii] <- u[2]
-            kappas <- exp(b2)
-            fit <- max_pen_likelihood(model_config, kappas[1], kappas[2], kappas[3])
-            fu[2] <- approx_cv(fit)$approx_cv_value
-
-            # Third point
-            b2[ii] <- u[3]
-            kappas <- exp(b2)
-            fit <- max_pen_likelihood(model_config, kappas[1], kappas[2], kappas[3])
-            fu[3] <- approx_cv(fit)$approx_cv_value
-
-            # Iterate through different step sizes
-            step_sizes <- c(1.0, 0.5, 0.25, 0.125)
-            for(uh in step_sizes) {
-                if(verbose) cat(sprintf("Step size: %.3f\n", uh))
-
-                # Case 1: Moving in positive direction
-                if(fu[1] < fu[2] && fu[2] < fu[3]) {
-                    if(verbose) cat("Case 1: Moving positive\n")
-                    for(j in 1:5) {
-                        u[1] <- u[2]
-                        fu[1] <- fu[2]
-                        u[2] <- u[3]
-                        fu[2] <- fu[3]
-                        u[3] <- u[2] + uh
-
-                        b2[ii] <- u[3]
-                        kappas <- exp(b2)
-                        fit <- max_pen_likelihood(model_config, kappas[1], kappas[2], kappas[3])
-                        fu[3] <- approx_cv(fit)$approx_cv_value
-
-                        if(verbose) {
-                            cat(sprintf("u: %.3f, %.3f, %.3f\n", u[1], u[2], u[3]))
-                            cat(sprintf("fu: %.3f, %.3f, %.3f\n", fu[1], fu[2], fu[3]))
-                        }
-                    }
-                }
-
-                # Case 2: Zoom between points
-                else if(fu[1] < fu[2] && fu[2] > fu[3]) {
-                    if(verbose) cat("Case 2: Zooming\n")
-                    u[3] <- u[2]
-                    fu[3] <- fu[2]
-                    u[2] <- u[1] + uh
-
-                    b2[ii] <- u[2]
-                    kappas <- exp(b2)
-                    fit <- max_pen_likelihood(model_config, kappas[1], kappas[2], kappas[3])
-                    fu[2] <- approx_cv(fit)$approx_cv_value
-                }
-
-                # Case 3: Moving in negative direction
-                else if(fu[1] > fu[2] && fu[2] > fu[3]) {
-                    if(verbose) cat("Case 3: Moving negative\n")
-                    u[3] <- u[2]
-                    fu[3] <- fu[2]
-                    u[2] <- u[1]
-                    fu[2] <- fu[1]
-                    u[1] <- u[3] - 2.0 * uh
-
-                    b2[ii] <- u[1]
-                    kappas <- exp(b2)
-                    fit <- max_pen_likelihood(model_config, kappas[1], kappas[2], kappas[3])
-                    fu[1] <- approx_cv(fit)$approx_cv_value
-                }
-            }
-
-            # Update b2 with best value found
-            if(fu[1] < fu[2] && fu[2] < fu[3]) {
-                b2[ii] <- u[3]
-            } else if(fu[1] < fu[2] && fu[2] > fu[3]) {
-                b2[ii] <- u[2]
-            } else if(fu[1] > fu[2] && fu[2] > fu[3]) {
-                b2[ii] <- u[1]
-            }
-
-            if(verbose) cat(sprintf("Final value for parameter %d: %.3f\n", ii, b2[ii]))
-        }
-    }
-
-    # Convert back to kappa values
-    final_kappas <- exp(b2)
-
-    # Final fit with optimal kappas
-    final_fit <- max_pen_likelihood(model_config, final_kappas[1], final_kappas[2], final_kappas[3])
-    final_cv <- approx_cv(final_fit)
-
-
-    hazards <- create_hazards(model_config, final_fit)
-
-    return(list(
-        hazards = hazards,
-        kappas = final_kappas,
-        fit = final_fit,
-        cv_value = final_cv$approx_cv_value,
-        log_kappas = b2,
+        cv_values = cvs,
+        other_fits = fits,
         model_config = model_config
     ))
 }

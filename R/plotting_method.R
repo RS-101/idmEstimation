@@ -1,6 +1,10 @@
 # create a plotting method for the idm_hazards class using ggplot2
 #' @export
-plot.idm_hazards <- function(x, max_time = 1, cumulative = FALSE, add = NULL, label = NULL, ...) {
+plot.idm_hazards <- function(x, estimator_name,
+                             max_time = c(1,1,3),
+                             cumulative = FALSE,
+                             add = NULL,
+                             label = NULL, ...) {
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     stop("Package 'ggplot2' is required for plotting.")
   }
@@ -8,14 +12,18 @@ plot.idm_hazards <- function(x, max_time = 1, cumulative = FALSE, add = NULL, la
     stop("Package 'tidyr' is required for plotting.")
   }
 
+
+  stopifnot(length(max_time) == 3)
+
   # create a data frame for plotting
-  time_seq <- seq(0, max_time, length.out = 256)
+  time_seq <- seq(0, max(max_time), length.out = 256)
+
   if (cumulative) {
     hazard_df <- data.frame(
       time = time_seq,
-      A12 = x$A12(time_seq),
-      A13 = x$A13(time_seq),
-      A23 = x$A23(time_seq)
+      A12 = ifelse(time_seq <= max_time[1], x$A12(time_seq), NA),
+      A13 = ifelse(time_seq <= max_time[2], x$A13(time_seq),NA),
+      A23 = ifelse(time_seq <= max_time[3], x$A23(time_seq),NA)
     )
     hazard_df_long <- tidyr::pivot_longer(hazard_df, cols = c("A12", "A13", "A23"),
                                             names_to = "hazard", values_to = "value")
@@ -25,9 +33,9 @@ plot.idm_hazards <- function(x, max_time = 1, cumulative = FALSE, add = NULL, la
     }
     hazard_df <- data.frame(
       time = time_seq,
-      a12 = x$a12(time_seq),
-      a13 = x$a13(time_seq),
-      a23 = x$a23(time_seq)
+      A12 = ifelse(time_seq <= max_time[1], x$A12(time_seq), NA),
+      A13 = ifelse(time_seq <= max_time[2], x$A13(time_seq),NA),
+      A23 = ifelse(time_seq <= max_time[3], x$A23(time_seq),NA)
     )
     hazard_df_long <- tidyr::pivot_longer(hazard_df, cols = c("a12", "a13", "a23"),
                                             names_to = "hazard", values_to = "value")
@@ -37,7 +45,7 @@ plot.idm_hazards <- function(x, max_time = 1, cumulative = FALSE, add = NULL, la
   if (!is.null(label)) {
     hazard_df_long$estimator <- label
   } else {
-    hazard_df_long$estimator <- "Estimator 1"
+    hazard_df_long$estimator <- estimator_name
   }
 
   # If adding to existing plot

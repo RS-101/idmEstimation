@@ -125,7 +125,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   N_tilde <- sum(idx_N_tilde)
   t_m_in_N_tilde <- data$T_obs[idx_N_tilde]
 
-  stopifnot(N_tilde < M)
+  stopifnot(N_tilde <= M)
 
   # K_tilde observations with direct transition 1 → 3, no missing transitions T_obs = V_healthy:
   idx_K_tilde <- !is_ill & is_dead & is_T_eq_Vhealthy
@@ -258,7 +258,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     A_m = to_mat(A_m), A_u = to_mat(A_u), A_c = to_mat(A_c),
     full_A_m = to_mat(full_A_m), Q_i = to_mat(Q_i)
   )
-  
+
   data_list
 }
 
@@ -336,7 +336,7 @@ fit_npmle <- function(data,
 
   z_init <- z_init/sum(z_init)
 
-  lambda_init <- runif(data_list$N,min = 0.00001, max = 0.05)
+  lambda_init <- runif(data_list$N,min = 0.00001, max = 0.1)
 
   fit <- em_fit(mdl_ptr,
                 z_init = z_init,
