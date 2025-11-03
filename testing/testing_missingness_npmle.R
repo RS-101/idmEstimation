@@ -49,6 +49,7 @@ p <- plot.idm_hazards(fit_np$hazards,
                       add = p,
                       cumulative = T)
 
+
 p
 
 
