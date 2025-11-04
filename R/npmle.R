@@ -364,6 +364,7 @@ fit_npmle <- function(data,
     ),
     settings = list(
       data = data,
+      data_list = data_list,
       max_iter = max_iter,
       tol = tol
     ))
