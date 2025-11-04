@@ -13,8 +13,6 @@ plot.idm_hazards <- function(x, estimator_name,
   }
 
 
-  stopifnot(length(max_time) == 3)
-
   # create a data frame for plotting
   time_seq <- seq(0, max(max_time), length.out = 256)
 

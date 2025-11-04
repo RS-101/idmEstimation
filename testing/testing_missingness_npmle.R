@@ -1,5 +1,8 @@
+library(idmEstimation)
 
-load("testing/plots/")
+set.seed(100)
+
+load("testing/plots/testing_missingness_npmle.rdata")
 plot(p)
 
 n <- 1000
@@ -19,42 +22,40 @@ summary(exact_data[exact_data$path == "1->2->3",])
 head(exact_data)
 head(sim_idm_list$datasets$obs)
 
-
-my_data <- data.frame(
-  id = 1:n,
-  V_0 = rep(0, n),
-  V_healthy = ifelse(!is.infinite(exact_data$T_ill), exact_data$T_ill -  runif(n,0,100), exact_data$T_death),
-  V_ill = ifelse(is.finite(exact_data$T_ill), exact_data$T_ill + runif(n,0,100), NA),
-  T_obs = exact_data$T_death,
-  status_dead = 1,
-  status_ill = as.numeric(is.finite(exact_data$T_ill))
-)
-
-max_time <- c(quantile(my_data$V_ill,probs = 0.8, na.rm = T),
-              max(my_data$T_obs[my_data$status_ill == 0]),
-              max(my_data$T_obs))
-
-summary(my_data)
-
-fit_np = fit_npmle(data = my_data, tol = 1e-4, verbose = T, max_iter = 400)
-
-
 p <- plot.idm_hazards(sim_idm_list$hazards,
                       estimator_name = "true",
-                      max_time = max_time, cumulative = T)
+                      max_time = max(exact_data$T_death), cumulative = T)
 
-p <- plot.idm_hazards(fit_np$hazards,
-                      estimator_name = "NPMLE_1",
-                      max_time = max_time,
-                      add = p,
-                      cumulative = T)
+for(i in c(1,10,100,1000)) {
+
+  my_data <- data.frame(
+    id = 1:n,
+    V_0 = rep(0, n),
+    V_healthy = ifelse(!is.infinite(exact_data$T_ill), exact_data$T_ill -  runif(n,0,i), exact_data$T_death),
+    V_ill = ifelse(is.finite(exact_data$T_ill), exact_data$T_ill + runif(n,0,i), NA),
+    T_obs = exact_data$T_death,
+    status_dead = 1,
+    status_ill = as.numeric(is.finite(exact_data$T_ill))
+  )
+
+  max_time <- c(quantile(my_data$V_ill,probs = 0.8, na.rm = T),
+                max(my_data$T_obs[my_data$status_ill == 0]),
+                max(my_data$T_obs))
+
+  summary(my_data)
+
+  fit_np = fit_npmle(data = my_data, tol = 1e-4, verbose = T, max_iter = 400)
+
+  p <- plot.idm_hazards(fit_np$hazards,
+                        estimator_name = paste("NPMLE_", i),
+                        max_time = max_time,
+                        add = p,
+                        cumulative = T)
 
 
-p
+}
 
+save(p, file = "testing/plots/testing_missingness_npmle.rdata")
 
-
-
-
-save(p, file = "testing/plots/")
+p + ggplot2::xlim(c(0,1000)) + ggplot2::ylim(c(0,2))
 
