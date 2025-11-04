@@ -2,7 +2,7 @@ library(idmEstimation)
 
 set.seed(100)
 
-n <- 1000
+n <- 300
 missing_distance = 10
 sim_idm_list <- idmEstimation::simulate_idm_weibull(
   n,
@@ -32,7 +32,7 @@ my_data <- data.frame(
   T_obs = exact_data$T_death,
   status_dead = 1,
   status_ill = as.numeric(is.finite(exact_data$T_ill))
-)
+) %>% arrange(T_obs)
 
 max_time <- c(quantile(my_data$V_ill,probs = 0.8, na.rm = T),
               max(my_data$T_obs[my_data$status_ill == 0]),
@@ -43,7 +43,39 @@ summary(my_data)
 
 
 
-fit_np = fit_npmle(data = my_data, tol = 1e-4, verbose = T, max_iter = 1000)
+fit_np = fit_npmle(data = my_data, tol = 1e-4, verbose = T, max_iter = 100)
+
+
+est_lambda <- round(as.numeric(fit_np$raw_estimators$lambda),3)
+
+lambda_data <- data.frame(
+  t = fit_np$settings$data_list$t_star_n,
+  lambda = est_lambda
+)
+
+
+fit_np$settings$data_list$I
+
+fit_np$settings$data_list$M
+fit_np$settings$data_list$K_tilde
+fit_np$settings$data_list$U
+fit_np$settings$data_list$C
+fit_np$settings$data_list$J
+fit_np$settings$data_list$J
+fit_np$settings$data_list$d_n
+fit_np$settings$data_list$N1_obs_of_T_star
+
+fit_np$settings$data_list$I_mark
+
+
+
+library(dplyr)
+lambda_data <- lambda_data %>%
+  arrange(t) %>%
+  mutate(cs = cumsum(lambda))
+
+lambda_data %>% arrange(-lambda) %>% filter(t < 1000)
+
 
 p <- plot.idm_hazards(fit_np$hazards,
                       estimator_name = paste("NPMLE_", missing_distance),
@@ -52,6 +84,6 @@ p <- plot.idm_hazards(fit_np$hazards,
                       cumulative = T)
 
 
-
-p + ggplot2::xlim(c(0,1000)) + ggplot2::ylim(c(0,2))
+p + ggplot2::xlim(c(0,3000)) + ggplot2::ylim(c(0,7)) +
+  ggplot2::geom_point(ggplot2::aes(x = t, y = cs, color = "A23", linetype = "point"), data = lambda_data)
 

@@ -94,6 +94,7 @@ struct ModelData {
       int index = (it != t_star_n.end()) ? std::distance(t_star_n.begin(), it) : -1;
       lambda_M_plus_u[u] = index;
     }
+    // Rcpp::Rcout << "[em_fit] lambda_M_plus_u: " << lambda_M_plus_u << std::endl;
   }
 
   void check() {
@@ -421,7 +422,7 @@ void run_em_once(const ModelData& md, Workspace& ws) {
       ws.mu_bar_ji(l,i) = md.alpha_ij(i,l) ?ws.z_i[i] : 0;
     }
     for (int l = md.L; l < md.U; ++l) {
-      ws.eta_ui(l,i) = md.beta_im(i, md.M + l) ?ws.lambda_n[md.lambda_M_plus_u[l]] *
+      ws.eta_ui(l,i) = md.beta_im(i, md.M + l) ? ws.lambda_n[md.lambda_M_plus_u[l]] *
         evaluate(ws, md.Q_i(i,1), md.t_u[l]) * ws.z_i[i] : 0 ;
     }
     for (int l = md.L; l < md.C; ++l) {
@@ -535,12 +536,19 @@ void run_em_once(const ModelData& md, Workspace& ws) {
       }
     }
 
+    //Rcpp::Rcout << "[em_fit] t_n is " << md.t_star_n[n] << std::endl;
+    //Rcpp::Rcout << "[em_fit] rho is " << sum_rho_n << std::endl;
+
     double demon = sum_rho_n + sum_pi_n + sum_sigma_n;
+    //Rcpp::Rcout << "[em_fit] demon is " << demon << std::endl;
 
     ws.lambda_n[n] = (d_n_part + sum_pi_full_n)/demon;
 
     // if lambda_n[n] is larger than 1, we set it to 0.05
     if(ws.lambda_n[n] > 1.0){
+
+     // Rcpp::Rcout << "[em_fit] Warning: lambda_n[" << n << "] > 1.0" << std::endl;
+     // Rcpp::Rcout << "[em_fit] Corresponding to t_star_n[" << n << "] = " << md.t_star_n[n] << std::endl;
       ws.lambda_n[n] = 0.05;
     }
 
@@ -561,6 +569,8 @@ void run_em_once(const ModelData& md, Workspace& ws) {
 
   ws.z_i = new_z;
 
+
+  //Rcpp::Rcout << "[em_fit] eta is " << ws.eta_ui << std::endl;
 }
 
 
