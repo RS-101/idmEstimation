@@ -31,9 +31,9 @@ plot.idm_hazards <- function(x, estimator_name,
     }
     hazard_df <- data.frame(
       time = time_seq,
-      A12 = ifelse(time_seq <= max_time[1], x$A12(time_seq), NA),
-      A13 = ifelse(time_seq <= max_time[2], x$A13(time_seq),NA),
-      A23 = ifelse(time_seq <= max_time[3], x$A23(time_seq),NA)
+      a12 = ifelse(time_seq <= max_time[1], x$a12(time_seq), NA),
+      a13 = ifelse(time_seq <= max_time[2], x$a13(time_seq),NA),
+      a23 = ifelse(time_seq <= max_time[3], x$a23(time_seq),NA)
     )
     hazard_df_long <- tidyr::pivot_longer(hazard_df, cols = c("a12", "a13", "a23"),
                                             names_to = "hazard", values_to = "value")

@@ -294,7 +294,7 @@ find_estimator_from_z_and_lambda <- function(grid_points, z_i, lambda_n, Q_i, Q_
     step_cdf(E_star-1e-6, times = Q_i_mark, masses = z_i[(I+1):I_mark])
   # A12(s): denominators need F(l_i-) for each i
   denom13 <- 1 - F_total_at_e_k
-  term13  <- ifelse(denom12 > 0, z_i[(I+1):I_mark] / denom13, 0)
+  term13  <- ifelse(denom13 > 0, z_i[(I+1):I_mark] / denom13, 0)
   A13 <- step_cdf(grid_points, times = E_star, term13)
 
 
