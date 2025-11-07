@@ -90,11 +90,6 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     Q
   }
 
-
-
-
-
-
   to_mat <- function(x) if (is.matrix(x)) x else as.matrix(unclass(x))
 
 

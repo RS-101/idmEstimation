@@ -392,7 +392,6 @@ void run_em_once(const ModelData& md, Workspace& ws) {
   ws.eta_ui.zeros(md.U, md.I_mark);
   ws.gamma_ci.zeros(md.C, md.I_mark);
 
-  // --- Loops over I ----------------------------------------------------------
   setup_prod(md,ws);
 
   // --- Loops over I ----------------------------------------------------------
@@ -536,8 +535,7 @@ void run_em_once(const ModelData& md, Workspace& ws) {
       }
     }
 
-    //Rcpp::Rcout << "[em_fit] t_n is " << md.t_star_n[n] << std::endl;
-    //Rcpp::Rcout << "[em_fit] rho is " << sum_rho_n << std::endl;
+    // Rcpp::Rcout << "[em_fit] sum sum_pi_full_n " << sum_pi_full_n << std::endl;
 
     double demon = sum_rho_n + sum_pi_n + sum_sigma_n;
     //Rcpp::Rcout << "[em_fit] demon is " << demon << std::endl;
