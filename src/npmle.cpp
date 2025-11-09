@@ -559,7 +559,9 @@ void run_em_once(const ModelData& md, Workspace& ws) {
   arma::rowvec new_z = base;
 
   new_z.head(md.I) += arma::sum(ws.mu_mi, 0);
-  new_z.subvec(md.I, md.I_mark - 1) += md.c_k;
+  if(md.c_k.n_elem > 0) {
+    new_z.subvec(md.I, md.I_mark - 1) += md.c_k;
+  }
   new_z /= md.N_star;
 
   // // normalize z_i to sum to 1
@@ -616,9 +618,6 @@ Rcpp::List em_fit(SEXP md_ptr,
     ws.lambda_n.fill(0.005);
   }
 
-
-
-
   double dz = 0.0, dl = 0.0;
   for (int iter = 0; iter < max_iter; ++iter) {
     arma::rowvec prev_lambda_n = ws.lambda_n; // copy
@@ -633,23 +632,34 @@ Rcpp::List em_fit(SEXP md_ptr,
       dl = std::max(dl, std::abs(ws.lambda_n[n] - prev_lambda_n[n]));
 
     if (verbose) {
-      Rcpp::Rcout << "iter " << (iter + 1)
-                  << ": max|Δz|=" << dz
-                  << " max|Δλ|=" << dl << "\n";
-      // print sum of z_i for debugging
-
-      double z_sum = arma::accu(ws.z_i);
-      Rcpp::Rcout << "[em_fit] sum(z_i) = " << z_sum << std::endl;
+      if(iter % 10 == 0 || iter == max_iter - 1){
+          Rcpp::Rcout << "iter " << (iter + 1)
+                      << ": max|Δz|=" << dz
+                      << " max|Δλ|=" << dl << "\n";
+          // print sum of z_i for debugging
+          double z_sum = arma::accu(ws.z_i);
+          Rcpp::Rcout << "[em_fit] sum(z_i) = " << z_sum << std::endl;
+      }
     }
 
-    if (std::isfinite(dz) && std::isfinite(dl) && std::max(dz, dl) < tol)
+    if (std::isfinite(dz) && std::isfinite(dl) && std::max(dz, dl) < tol) {
+      if(std::max(dz, dl) < tol) {
+        Rcpp::Rcout << "----------------------------------------------------\n";
+        Rcpp::Rcout << "Convergence achieved: max|Δz| and max|Δλ| < tol (" << tol << "). After " << (iter + 1) << " iterations." << std::endl;
+      } else {
+        Rcpp::Rcout << "----------------------------------------------------\n";
+        Rcpp::Rcout << "Stopping: max|Δz| or max|Δλ| is NaN or Inf. After " << (iter + 1) << " iterations." << std::endl;
+      }
       break;
-
-
-
+    }
+    if (iter == max_iter - 1) {
+      Rcpp::Rcout << "----------------------------------------------------\n";
+      Rcpp::Rcout << "Maximum iterations reached (" << max_iter << ")." << std::endl;
+    }
   }
 
-  if (verbose) print_summary(md, ws);
+
+  // if (verbose) print_summary(md, ws);
 
 
 

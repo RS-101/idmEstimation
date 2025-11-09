@@ -195,7 +195,11 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   R_max <- max(A_m[, 2], A_u[, 2])
 
   # e*_max = max(e*_k, 1 <= k <= K)
-  e_star_max <- max(E_star)
+  if(length(E_star) > 0) {
+    e_star_max <- max(E_star)
+  } else {
+    e_star_max = 0
+  }
 
   # L_bar ={L_m, 1 <= m <= M'} ∪ {T* ∩ A} ∪ {S_J ∩ A} ∪ {s_max : s_max > R_max ∨ e*_max}
   L_bar <- c(
