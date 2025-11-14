@@ -25,3 +25,11 @@ calc_penalized_log_likelihood <- function(md_ptr, theta_12, theta_13, theta_23, 
     .Call(`_idmEstimation_calc_penalized_log_likelihood`, md_ptr, theta_12, theta_13, theta_23, kappa_12, kappa_13, kappa_23)
 }
 
+create_pwc_model_data <- function(data) {
+    .Call(`_idmEstimation_create_pwc_model_data`, data)
+}
+
+calc_log_likelihood_pwc <- function(md_ptr, lambda_12, lambda_13, lambda_23) {
+    .Call(`_idmEstimation_calc_log_likelihood_pwc`, md_ptr, lambda_12, lambda_13, lambda_23)
+}
+

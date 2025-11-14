@@ -97,6 +97,31 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// create_pwc_model_data
+SEXP create_pwc_model_data(List data);
+RcppExport SEXP _idmEstimation_create_pwc_model_data(SEXP dataSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< List >::type data(dataSEXP);
+    rcpp_result_gen = Rcpp::wrap(create_pwc_model_data(data));
+    return rcpp_result_gen;
+END_RCPP
+}
+// calc_log_likelihood_pwc
+double calc_log_likelihood_pwc(SEXP md_ptr, const arma::vec& lambda_12, const arma::vec& lambda_13, const arma::vec& lambda_23);
+RcppExport SEXP _idmEstimation_calc_log_likelihood_pwc(SEXP md_ptrSEXP, SEXP lambda_12SEXP, SEXP lambda_13SEXP, SEXP lambda_23SEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type md_ptr(md_ptrSEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type lambda_12(lambda_12SEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type lambda_13(lambda_13SEXP);
+    Rcpp::traits::input_parameter< const arma::vec& >::type lambda_23(lambda_23SEXP);
+    rcpp_result_gen = Rcpp::wrap(calc_log_likelihood_pwc(md_ptr, lambda_12, lambda_13, lambda_23));
+    return rcpp_result_gen;
+END_RCPP
+}
 
 static const R_CallMethodDef CallEntries[] = {
     {"_idmEstimation_make_model_data", (DL_FUNC) &_idmEstimation_make_model_data, 1},
@@ -105,6 +130,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_idmEstimation_calc_log_likelihood", (DL_FUNC) &_idmEstimation_calc_log_likelihood, 4},
     {"_idmEstimation_calc_full_penalty", (DL_FUNC) &_idmEstimation_calc_full_penalty, 7},
     {"_idmEstimation_calc_penalized_log_likelihood", (DL_FUNC) &_idmEstimation_calc_penalized_log_likelihood, 7},
+    {"_idmEstimation_create_pwc_model_data", (DL_FUNC) &_idmEstimation_create_pwc_model_data, 1},
+    {"_idmEstimation_calc_log_likelihood_pwc", (DL_FUNC) &_idmEstimation_calc_log_likelihood_pwc, 4},
     {NULL, NULL, 0}
 };
 
