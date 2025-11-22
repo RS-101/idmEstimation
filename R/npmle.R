@@ -305,6 +305,25 @@ find_estimator_from_z_and_lambda <- function(grid_points, z_i, lambda_n, Q_i, Q_
     approxfun(x, y, method = "constant", f = f, rule = rule)
   }
 
+  F23 <- function(s,t) {
+    stopifnot(length(s) == 1)
+
+    t_star_n_order <- order(t_star_n)
+    t_star_n <- t_star_n[t_star_n_order]
+    lambda_n <- lambda_n[t_star_n_order]
+
+    eligeble <- s < t_star_n & t_star_n <= max(t)
+
+    t_star_n <- t_star_n[eligeble]
+    lambda_n  <- lambda_n[eligeble]
+
+    cp <- cumprod(1-lambda_n)
+    idx <- findInterval(t, t_star_n)
+    c(0,cp)[idx+1]
+  }
+
+
+
   hazards_as_functions <- list(
     A12  = stepify(grid_points, A12, side = "left"),
     A13  = stepify(grid_points, A13, side = "left"),
@@ -312,12 +331,12 @@ find_estimator_from_z_and_lambda <- function(grid_points, z_i, lambda_n, Q_i, Q_
   )
   class(hazards_as_functions) <- c("idm_hazards", class(hazards_as_functions))
 
-
   list(
     distributions_as_functions = list(
       F12 = stepify(grid_points, F12, side = "left"),
       F13 = stepify(grid_points, F13, side = "left"),
-      F = stepify(grid_points, F_total, side = "left")),
+      F = stepify(grid_points, F_total, side = "left"),
+      F23 = F23),
     hazards_as_functions = hazards_as_functions
   )
 }

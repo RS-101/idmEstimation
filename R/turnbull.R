@@ -1,8 +1,8 @@
-fit_turnbull <- function(obs) {
+fit_turnbull <- function(obs, s = NULL) {
   make_Q <- function() {
-    LL <- sort(unique(union(obs$L, obs$R_truc)))
+    LL <- sort(unique(union(obs$L, obs$R_tilde)))
     LL <- LL[is.finite(LL)]
-    RR <- sort(unique(union(obs$R, obs$L_truc)))
+    RR <- sort(unique(union(obs$R, obs$L_tilde)))
 
     Q <- matrix(c(rep(0L, length(LL)), rep(1L, length(RR)),
                   LL, RR), ncol = 2)
@@ -33,16 +33,21 @@ fit_turnbull <- function(obs) {
   M <- function(s) sum(1/colSums(s*t(d_ij)))
 
   m <- nrow(Q)
-  s <- runif(m)
+  if(is.null(s)) s <- runif(m)
   s <- s/sum(s)
   not_conv <- TRUE
   while(not_conv){
-    s_new <- s*(1+d_ll(s,1:m)/ M(s))
+    if(M(s) > 0) {
+      s_new <- s*(1+d_ll(s,1:m)/M(s))
+    } else {
+      s_new = rep(0,m)
+    }
 
     not_conv = sum(abs(s_new-s)) > 1e-05
     s = s_new
-#    print(s)
   }
+
+  if(d_ll(s,1:m) <= 0) stop("KKT NOT STATISFIED")
 
   list(s = s, Q = Q)
 }
