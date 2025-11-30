@@ -208,7 +208,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   )
 
   # R_bar = {R_m, 1 <= m <= W} ∪ {∞}
-  R_bar <- c(LR_AB[, 2], Inf)
+  R_bar <- c(LR_AB[, 2], t_E, Inf)
 
   Q_j <- make_Q(L_bar, R_bar)
 
