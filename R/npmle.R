@@ -385,5 +385,6 @@ fit_npmle <- function(data,
       data_list = data_list,
       max_iter = max_iter,
       tol = tol
-    ))
+    ),
+    converged = fit$converged)
 }

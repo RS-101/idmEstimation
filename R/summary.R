@@ -27,6 +27,10 @@ summarise_obs_data <- function(observed_data, print = TRUE) {
     useNA = "ifany"
   )
 
+  n_missing = n_censoring_missing_transition + n_death_missing_transition
+  n_ill = sum(observed_data$status_ill)
+  n_no_ill_obs = n - sum(observed_data$status_ill)
+
   out <- list(
     n = n,
     counts = list(
@@ -35,7 +39,12 @@ summarise_obs_data <- function(observed_data, print = TRUE) {
       n_death_exact = n_death_exact,
       n_death_missing_transition = n_death_missing_transition,
       n_censoring_exact = n_censoring_exact,
-      n_censoring_missing_transition = n_censoring_missing_transition
+      n_censoring_missing_transition = n_censoring_missing_transition,
+      n_missing = n_missing,
+      n_ill = n_ill,
+      n_no_ill_obs = n_no_ill_obs,
+      p_missing = n_missing/n_no_ill_obs,
+      p_missing_any = n_missing/n
     ),
     tables = list(
       table_illness = table_illness,

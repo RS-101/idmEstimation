@@ -584,7 +584,7 @@ Rcpp::List em_fit(SEXP md_ptr,
 
   Rcpp::XPtr<ModelData> p(md_ptr);
   const ModelData& md = *p;
-
+  bool converged = false;
   Workspace ws;
 
   const arma::uword I_mark = static_cast<arma::uword>(md.I_mark);
@@ -646,6 +646,7 @@ Rcpp::List em_fit(SEXP md_ptr,
       if(std::max(dz, dl) < tol) {
         Rcpp::Rcout << "----------------------------------------------------\n";
         Rcpp::Rcout << "Convergence achieved: max|Δz| and max|Δλ| < tol (" << tol << "). After " << (iter + 1) << " iterations." << std::endl;
+        converged = true;
       } else {
         Rcpp::Rcout << "----------------------------------------------------\n";
         Rcpp::Rcout << "Stopping: max|Δz| or max|Δλ| is NaN or Inf. After " << (iter + 1) << " iterations." << std::endl;
@@ -671,6 +672,7 @@ Rcpp::List em_fit(SEXP md_ptr,
     Rcpp::_["mu_mi"]        = ws.mu_mi,
     Rcpp::_["mu_bar_ji"]    = ws.mu_bar_ji,
     Rcpp::_["eta_ui"]       = ws.eta_ui,
-    Rcpp::_["gamma_ci"]     = ws.gamma_ci
+    Rcpp::_["gamma_ci"]     = ws.gamma_ci,
+    Rcpp::_["converged"]    = converged
   );
 }
