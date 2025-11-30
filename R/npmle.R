@@ -106,164 +106,161 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   is_T_eq_Vhealthy <- abs(data$T_obs - data$V_healthy) < is_equal_tol
   is_T_gt_Vhealthy <- abs(data$T_obs - data$V_healthy) > is_equal_tol
 
-  # M observations with interval censored times of 1 → 2 transition:
+  # N_AB observations with interval censored times of 1 → 2 transition:
   idx_M <- is_ill
-  M <- sum(idx_M)
-  L_m <- data$V_healthy[idx_M]
-  R_m <- data$V_ill[idx_M]
-  t_m <- data$T_obs[idx_M]
+  N_AB <- sum(idx_M)
+  L_AB <- data$V_healthy[idx_M]
+  R_AB <- data$V_ill[idx_M]
+  t_AB <- data$T_obs[idx_M]
 
-  stopifnot(all(L_m < R_m))
+  stopifnot(all(L_AB < R_AB))
 
-  # N_tilde of M also make a transition to state 3: t_m_in_N_tilde ⊆ t_m
+  # N_A of N_AB also make a transition to state 3: t_A ⊆ t_AB
   idx_N_tilde <- is_ill & is_dead
-  N_tilde <- sum(idx_N_tilde)
-  t_m_in_N_tilde <- data$T_obs[idx_N_tilde]
+  N_A <- sum(idx_N_tilde)
+  t_A <- data$T_obs[idx_N_tilde]
 
-  stopifnot(N_tilde <= M)
+  stopifnot(N_A <= N_AB)
 
-  # K_tilde observations with direct transition 1 → 3, no missing transitions T_obs = V_healthy:
+  # N_C observations with direct transition 1 → 3, no missing transitions T_obs = V_healthy:
   idx_K_tilde <- !is_ill & is_dead & is_T_eq_Vhealthy
-  K_tilde <- sum(idx_K_tilde)
-  e_k <- data$T_obs[idx_K_tilde]
+  N_C <- sum(idx_K_tilde)
+  t_C <- data$T_obs[idx_K_tilde]
 
-  # J observations censored in state 1, no missing transitions T_obs = V_healthy:
+  # N_D observations censored in state 1, no missing transitions T_obs = V_healthy:
   idx_J <- !is_dead & !is_ill & is_T_eq_Vhealthy
-  J <- sum(idx_J)
-  s_j <- data$T_obs[idx_J]
+  N_D <- sum(idx_J)
+  t_D <- data$T_obs[idx_J]
 
-  # U observations, last seen in state 1 and then seen in state 3:
+  # N_E observations, last seen in state 1 and then seen in state 3:
   idx_U <- !is_ill & is_dead & is_T_gt_Vhealthy
-  U <- sum(idx_U)
-  L_u <- data$V_healthy[idx_U]
-  t_u <- data$T_obs[idx_U]
+  N_E <- sum(idx_U)
+  L_E <- data$V_healthy[idx_U]
+  t_E <- data$T_obs[idx_U]
 
-  # C observations, last seen in state 1 and then censored:
+  # N_F observations, last seen in state 1 and then censored:
   idx_C <- !is_ill & !is_dead & is_T_gt_Vhealthy
-  C <- sum(idx_C)
-  L_c <- data$V_healthy[idx_C]
-  t_c <- data$T_obs[idx_C]
+  N_F <- sum(idx_C)
+  L_F <- data$V_healthy[idx_C]
+  t_F <- data$T_obs[idx_C]
 
+  t_DF <- c(t_D,t_F)
 
-  ##### K: E* - Obs and potential 1 -> 3 ####
-  E_star <- unique(c(e_k, t_u))
-  # c_k should only count exact observations from case 2 (e_k), not t_u
-  # sum(c_k) should equal K_tilde, not K_tilde + U
-  c_k <- as.numeric(table(factor(e_k, levels = E_star)))
-  K <- length(E_star)
+  ##### N_CE_star: E* - Obs and potential 1 -> 3 ####
+  t_CE_star <- unique(c(t_C, t_E))
+  # r_C should only count exact observations from case 2 (t_C), not t_E
+  # sum(r_C) should equal N_C, not N_C + N_E
+  r_C <- as.numeric(table(factor(t_C, levels = t_CE_star)))
+  N_CE_star <- length(t_CE_star)
 
-  ##### N: T* - Obs and potential entry to state 3 from state 2: 1 -> 2 -> 3 ####
-  t_star_n <- unique(c(t_m_in_N_tilde, t_u))
-  d_n <- as.numeric(table(factor(c(t_m_in_N_tilde, t_u), levels = t_star_n)))
+  ##### N_AE_star: T* - Obs and potential entry to state 3 from state 2: 1 -> 2 -> 3 ####
+  t_AE_star <- unique(c(t_A, t_E))
+  r_A <- as.numeric(table(factor(c(t_A), levels = t_AE_star)))
 
-  N1_obs_of_T_star <- length(unique(t_m_in_N_tilde))
-  U_pos_obs_of_T_star <- length(setdiff(unique(t_u), unique(t_m_in_N_tilde)))
+  N_A_star <- length(unique(t_A))
 
-  N <- length(t_star_n)
+  N_AE_star <- length(t_AE_star)
 
-  ##### Total: N* = M + U + C + K_tilde + J ####
-  N_star <- M + U + C + K_tilde + J # Total count
+  ##### Total: N_ABEFCD = N_AB + N_E + N_F + N_C + N_D ####
+  N_ABEFCD <- N_AB + N_E + N_F + N_C + N_D # Total count
 
-  ##### Max 1 -> 2: M' = M + U + C ####
-  M_mark <- M + U + C # Max number through 2.
+  ##### Max 1 -> 2: N_ABEF = N_AB + N_E + N_F ####
+  N_ABEF <- N_AB + N_E + N_F # Max number through 2.
 
   #### Creation of A sets ####
 
-  ##### M: A_m := [L_m, R_m] ####
-  A_m <- as.interval(matrix(c(L_m, R_m), ncol = 2, byrow = F))
+  ##### N_AB: LR_AB := [L_AB, R_AB] ####
+  LR_AB <- as.interval(matrix(c(L_AB, R_AB), ncol = 2, byrow = F))
 
-  ##### W: M < m <= W := M + U, R_{M+u} = t_{M+u} ####
-  A_u <- as.interval(matrix(c(L_u, t_u), ncol = 2, byrow = F))
-  W = M + U
+  ##### W: N_AB < m <= W := N_AB + N_E, R_{N_AB+u} = t_{N_AB+u} ####
+  LR_E <- as.interval(matrix(c(L_E, t_E), ncol = 2, byrow = F))
+  W = N_AB + N_E
 
-  ##### M': W := M + U < m <= M', R_{W+c} = t_{W+c} ####
-  A_c <- as.interval(matrix(c(L_c, t_c), ncol = 2, byrow = F))
+  ##### N_ABEF: W := N_AB + N_E < m <= N_ABEF, R_{W+c} = t_{W+c} ####
+  LR_F <- as.interval(matrix(c(L_F, t_F), ncol = 2, byrow = F))
 
-  ##### full_A_m: A_m ∪ A_u ∪ A_c ####
-  full_A_m <- as.interval(rbind(A_m, A_u, A_c))
-
-  ##### A := ⋃_{m=1}^{M'} A_m ####
-  A_union <- get_interval(full_A_m)
+  ##### LR_ABEF: LR_AB ∪ LR_E ∪ LR_F ####
+  LR_ABEF <- as.interval(rbind(LR_AB, LR_E, LR_F))
+  I_union <- get_interval(LR_ABEF)
 
   #### Data manipulation ####
-  ##### I: Q_i = [l_i,r_i] ####
+  ##### I: Q_j = [l_i,r_i] ####
 
-  # s_max = max(s_j, 1 <= j <= J)
-  s_max <- ifelse(length(s_j) > 0 ,max(s_j),0)
+  # s_max = max(t_D, 1 <= j <= N_D)
+  s_max <- ifelse(length(t_D) > 0 ,max(t_D),0)
 
-  # R_max = max(R_m, 1 <= m <= W)
-  R_max <- max(A_m[, 2], A_u[, 2])
+  # R_max = max(R_AB, 1 <= m <= W)
+  R_max <- max(LR_AB[, 2], LR_E[, 2])
 
-  # e*_max = max(e*_k, 1 <= k <= K)
-  if(length(E_star) > 0) {
-    e_star_max <- max(E_star)
+  # e*_max = max(e*_k, 1 <= k <= N_CE_star)
+  if(length(t_CE_star) > 0) {
+    e_star_max <- max(t_CE_star)
   } else {
     e_star_max = 0
   }
 
   # L_bar ={L_m, 1 <= m <= M'} ∪ {T* ∩ A} ∪ {S_J ∩ A} ∪ {s_max : s_max > R_max ∨ e*_max}
   L_bar <- c(
-    full_A_m[, 1],
-    intersect.interval(A_union, t_star_n),
-    intersect.interval(A_union, s_j),
+    LR_ABEF[, 1],
+    intersect.interval(I_union, t_AE_star),
+    intersect.interval(I_union, t_D),
     na.omit(ifelse(s_max > max(R_max, e_star_max), s_max, NA))
   )
 
   # R_bar = {R_m, 1 <= m <= W} ∪ {∞}
-  R_bar <- c(full_A_m[1:(M + U), 2], Inf)
+  R_bar <- c(LR_AB[, 2], t_E, Inf)
 
-  # !!!DANGER I AM UNSURE ABOUT THE CREATION OF Q!!!
-  Q_i <- make_Q(L_bar, R_bar)
+  Q_j <- make_Q(L_bar, R_bar)
 
-  Q <- get_interval(Q_i)
+  Q <- get_interval(Q_j)
 
-  I <- nrow(Q_i)
+  I <- nrow(Q_j)
 
 
-  ##### I'= K + I: Q_i' = e*_i-I ####
-  Q_i_mark <- E_star
+  ##### I'= N_CE_star + I: Q_j' = e*_i-I ####
+  Q_i_mark <- t_CE_star
 
   ##### Q_full = list ####
-  Q_full <- list(Q_i, Q_i_mark)
-
-  ##### C: s_J+c = t_W+c ####
-  s_j_c <- t_c
-
-  s_j_full <- c(s_j, s_j_c)
+  Q_full <- list(Q_j, Q_i_mark)
 
 
-  ##### N: lambda_n and I': z_i ####
-  # Comment: I believe we have I' z_i's and N: lambda_n
-  I_mark <- I + K
-
+  ##### N_AE_star: lambda_n and I': z_i ####
+  # Comment: I believe we have I' z_i's and N_AE_star: lambda_n
+  I_mark <- I + N_CE_star
   data_list <- list(
     # ints
-    J = J, C = C, K_tilde = K_tilde, U = U, N_tilde = N_tilde, M = M, W = W,
-    N1_obs_of_T_star = N1_obs_of_T_star,
-    U_pos_obs_of_T_star = U_pos_obs_of_T_star,
-    N = N, N_star = N_star, M_mark = M_mark, I = I, K = K, I_mark = I_mark,
+    N_D = N_D, N_F = N_F, N_C = N_C, N_E = N_E, N_A = N_A,
+    N_A_star = N_A_star, N_AB = N_AB, W = W, N_AE_star = N_AE_star,
+    N_ABEF = N_ABEF, I = I,
+    N_CE_star = N_CE_star, I_mark = I_mark,
+    N = N_ABEFCD,     # only if you also use it in C++
 
     # scalars
     s_max = s_max, R_max = R_max, e_star_max = e_star_max,
 
     # vectors
-    s_j = s_j, L_c = L_c, t_c = t_c, e_k = e_k, L_u = L_u, t_u = t_u,
-    t_m_in_N_tilde = t_m_in_N_tilde, L_m = L_m, R_m = R_m, t_m = t_m,
-    E_star = E_star, t_star_n = t_star_n, c_k = c_k, d_n = d_n,
-    L_bar = L_bar, R_bar = R_bar, s_j_c = s_j_c, s_j_full = s_j_full,
-    Q = Q, Q_i_mark = Q_i_mark, A_union = A_union,
+    t_D = t_D, L_F = L_F, t_F = t_F, t_C = t_C,
+    L_E = L_E, t_E = t_E,
+    L_AB = L_AB, R_AB = R_AB,     # then in C++ read x["R_AB"]
+    t_AB = t_AB,
+    t_CE_star = t_CE_star, t_AE_star = t_AE_star,
+    t_DF = t_DF,                  # if you really need t_DF
 
-    # 2-col “interval” matrices
-    A_m = to_mat(A_m), A_u = to_mat(A_u), A_c = to_mat(A_c),
-    full_A_m = to_mat(full_A_m), Q_i = to_mat(Q_i)
+    r_C = r_C, r_A = r_A,
+    Q = Q, Q_i_mark = Q_i_mark,
+
+    # 2-col matrices
+    LR_AB = to_mat(LR_AB), LR_E = to_mat(LR_E), LR_F = to_mat(LR_F),
+    LR_ABEF = to_mat(LR_ABEF), Q_j = to_mat(Q_j)
   )
+
 
   data_list
 }
 
-find_estimator_from_z_and_lambda <- function(grid_points, z_i, lambda_n, Q_i, Q_i_mark, t_star_n, E_star) {
+find_estimator_from_z_and_lambda <- function(grid_points, z_i, lambda_n, Q_j, Q_i_mark, t_AE_star, t_CE_star) {
 
-  I <- nrow(Q_i)
+  I <- nrow(Q_j)
   I_mark <- I + length(Q_i_mark)
 
   # helper: right-continuous step CDF from (times, masses) at s_eval
@@ -277,24 +274,24 @@ find_estimator_from_z_and_lambda <- function(grid_points, z_i, lambda_n, Q_i, Q_
   }
 
   # use intercept for F12 instead of just right or left endpoint
-  F12 <- step_cdf(grid_points, times = Q_i[1:I, 2], masses = z_i[1:I])
+  F12 <- step_cdf(grid_points, times = Q_j[1:I, 2], masses = z_i[1:I])
   F13 <- step_cdf(grid_points, times = Q_i_mark, masses = z_i[(I+1):I_mark])
   F_total <- F12 + F13
 
-  A23 <- step_cdf(grid_points, t_star_n, masses = lambda_n)
+  A23 <- step_cdf(grid_points, t_AE_star, masses = lambda_n)
 
-  F12_at_l_i <- step_cdf(Q_i[,1]-1e-6, times = Q_i[1:I, 2], masses = z_i[1:I])
+  F12_at_l_i <- step_cdf(Q_j[,1]-1e-6, times = Q_j[1:I, 2], masses = z_i[1:I])
   # A12(s): denominators need F(l_i-) for each i
   denom12 <- 1 - F12_at_l_i
   term12  <- ifelse(denom12 > 0, z_i[1:I] / denom12, 0)
-  A12 <- step_cdf(grid_points, times = Q_i[,2], term12)
+  A12 <- step_cdf(grid_points, times = Q_j[,2], term12)
 
-  F_total_at_e_k <- step_cdf(E_star-1e-6, times = Q_i[1:I, 2], masses = z_i[1:I]) +
-    step_cdf(E_star-1e-6, times = Q_i_mark, masses = z_i[(I+1):I_mark])
+  F_total_at_e_k <- step_cdf(t_CE_star-1e-6, times = Q_j[1:I, 2], masses = z_i[1:I]) +
+    step_cdf(t_CE_star-1e-6, times = Q_i_mark, masses = z_i[(I+1):I_mark])
   # A12(s): denominators need F(l_i-) for each i
   denom13 <- 1 - F_total_at_e_k
   term13  <- ifelse(denom13 > 0, z_i[(I+1):I_mark] / denom13, 0)
-  A13 <- step_cdf(grid_points, times = E_star, term13)
+  A13 <- step_cdf(grid_points, times = t_CE_star, term13)
 
 
   # Turn vectors into step functions over grid_points
@@ -308,17 +305,17 @@ find_estimator_from_z_and_lambda <- function(grid_points, z_i, lambda_n, Q_i, Q_
   F23 <- function(s,t) {
     stopifnot(length(s) == 1)
 
-    t_star_n_order <- order(t_star_n)
-    t_star_n <- t_star_n[t_star_n_order]
+    t_star_n_order <- order(t_AE_star)
+    t_AE_star <- t_AE_star[t_star_n_order]
     lambda_n <- lambda_n[t_star_n_order]
 
-    eligeble <- s < t_star_n & t_star_n <= max(t)
+    eligeble <- s < t_AE_star & t_AE_star <= max(t)
 
-    t_star_n <- t_star_n[eligeble]
+    t_AE_star <- t_AE_star[eligeble]
     lambda_n  <- lambda_n[eligeble]
 
     cp <- cumprod(1-lambda_n)
-    idx <- findInterval(t, t_star_n)
+    idx <- findInterval(t, t_AE_star)
     c(0,cp)[idx+1]
   }
 
@@ -354,7 +351,7 @@ fit_npmle <- function(data,
 
   z_init <- z_init/sum(z_init)
 
-  lambda_init <- runif(data_list$N,min = 0.00001, max = 0.1)
+  lambda_init <- runif(data_list$N_AE_star,min = 0.00001, max = 0.1)
 
   fit <- em_fit(mdl_ptr,
                 z_init = z_init,
@@ -369,8 +366,8 @@ fit_npmle <- function(data,
     lambda = fit$lambda_n,
     data_list$Q,
     data_list$Q_i_mark,
-    data_list$t_star_n,
-    data_list$E_star
+    data_list$t_AE_star,
+    data_list$t_CE_star
   )
 
   list(
@@ -388,3 +385,6 @@ fit_npmle <- function(data,
     ),
     converged = fit$converged)
 }
+
+
+
