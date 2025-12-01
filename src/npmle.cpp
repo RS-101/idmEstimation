@@ -9,7 +9,7 @@ using namespace Rcpp;
 
 struct ModelData {
   // --- counts (ints) ---
-  int N_D, N_F, N_C, N_E, N_A, N_A_star, N_AB, W,
+  int N_D, N_F, N_C, N_E, N_A, N_A_star, N_AB, N_B, W,
   N_AE_star, N, N_ABEF, N_CE_star, I, I_mark,
   L; // min of N_AB, N_E, N_F for loops
 
@@ -31,10 +31,6 @@ struct ModelData {
   // --- Indicator matrices ---
   LogicalMatrix alpha_ij;  // I_mark x (N_D+N_F), my alpha + beta
   LogicalMatrix gamma_im;   // I x N_ABEF, my gamma
-  LogicalMatrix I_rho_mn;  // N_AB x N_AE_star
-  LogicalMatrix I_pi_un;   // N_E x N_AE_star
-  LogicalMatrix I_sigma_cn; // N_F x N_AE_star
-
 
   // ---------- (18) alpha: I' x (N_D+N_F) ----------
   void cal_alpha() {
@@ -50,7 +46,7 @@ struct ModelData {
   }
 
   // ---------- (19) beta: I x N_AB' ----------
-  void cal_beta() {
+  void cal_gamma() {
     int I = Q_j.nrow();
     int N_ABEF = LR_ABEF.nrow();
     gamma_im = Rcpp::LogicalMatrix(I, N_ABEF);
@@ -64,32 +60,14 @@ struct ModelData {
     }
   }
 
-  // ----- Calc Indicator matrices ------
-  void cal_indicator_matrices() {
-    I_rho_mn = Rcpp::LogicalMatrix(N_AB, N_AE_star);  // N_AB x N_AE_star
-    I_pi_un = Rcpp::LogicalMatrix(N_E, N_AE_star);   // N_E x N_AE_star
-    I_sigma_cn = Rcpp::LogicalMatrix(N_F, N_AE_star); // N_F x N_AE_star
-
-    for(int n = 0; n < N_AE_star; ++n) {
-      for(int m = 0; m < N_AB; ++m) {
-        I_rho_mn(m,n) = t_AB[m] >= t_AE_star[n];
-      }
-      for(int u = 0; u < N_E; ++u) {
-        I_pi_un(u,n) = t_E[u] >= t_AE_star[n];
-      }
-      for(int c = 0; c < N_F; ++c) {
-        I_sigma_cn(c,n) = t_F[c] >= t_AE_star[n];
-      }
-    }
-  }
 
   IntegerVector lambda_M_plus_u;
 
-  // lambda_M_p_u <- lambda_n[t_AE_star == t_E[u]]
+  // lambda_M_p_u <- lambda_u[t_AE_star == t_E[u]]
   void calc_lambda_M_plus_u() {
     lambda_M_plus_u = IntegerVector(N_E, NA_INTEGER);
     for(int u = 0; u < N_E; ++u){
-      // lambda_M_p_u <- lambda_n[t_AE_star == t_E[u]]
+      // lambda_M_p_u <- lambda_u[t_AE_star == t_E[u]]
       const double val = t_E[u];
       auto it = std::find_if(t_AE_star.begin(), t_AE_star.end(), [&](double x){ return std::abs(x - val) < 1e-9; });
       int index = (it != t_AE_star.end()) ? std::distance(t_AE_star.begin(), it) : -1;
@@ -194,10 +172,9 @@ struct ModelData {
     Q_j      = as<NumericMatrix>(x["Q_j"]);
 
     cal_alpha();
-    cal_beta();
+    cal_gamma();
 
     calc_lambda_M_plus_u();
-    cal_indicator_matrices();
     L = std::min(N_AB, std::min(N_E, std::min(N_F, N_D)));
 
     // checks
@@ -214,18 +191,18 @@ SEXP make_model_data(List x) {
 // ---------- workspace + helpers ----------
 struct Workspace {
   // parameters updated by EM
-  arma::rowvec lambda_n;  // length N_AE_star
-  arma::rowvec z_i;       // length I_mark
+  arma::rowvec lambda_u;  // length N_AE_star
+  arma::rowvec z_j;       // length I_mark
 
   Rcpp::NumericVector t_sorted;   // sorted t_n
-  Rcpp::NumericVector log_prefix; // prefix sum of log(1 - lambda_n) over sorted order
-  Rcpp::NumericVector zero_prefix;// prefix count of zeros in (1 - lambda_n)
+  Rcpp::NumericVector log_prefix; // prefix sum of log(1 - lambda_u) over sorted order
+  Rcpp::NumericVector zero_prefix;// prefix count of zeros in (1 - lambda_u)
 
   // E-step pieces
-  arma::mat mu_mi;
-  arma::mat mu_bar_ji;
-  arma::mat eta_ui;
-  arma::mat gamma_ci;
+  arma::mat P123_AB;
+  arma::mat P123_D;
+  arma::mat P123_E;
+  arma::mat P123_F;
 };
 
 void setup_prod(const ModelData& md, Workspace& ws) {
@@ -235,9 +212,9 @@ void setup_prod(const ModelData& md, Workspace& ws) {
   // - log_prefix[i+1] = sum_{k<=i, lambda_k!=1} log(1 - lambda_k)
   // - zero_prefix[i+1] = count_{k<=i} [lambda_k == 1]
   const R_xlen_t N_AE_star = md.t_AE_star.size();
-  if (ws.lambda_n.size() != N_AE_star) {
-    stop("lambda_n length (%d) must match t_AE_star length (%d).",
-         (int)ws.lambda_n.size(), (int)N_AE_star);
+  if (ws.lambda_u.size() != N_AE_star) {
+    stop("lambda_u length (%d) must match t_AE_star length (%d).",
+         (int)ws.lambda_u.size(), (int)N_AE_star);
   }
 
   // build sorted index of t_AE_star
@@ -258,7 +235,7 @@ void setup_prod(const ModelData& md, Workspace& ws) {
   for (R_xlen_t i = 0; i < N_AE_star; ++i) {
     int k = idx[i];
     const double t   = md.t_AE_star[k];
-    const double lam = ws.lambda_n[k];
+    const double lam = ws.lambda_u[k];
 
     ws.t_sorted[i] = t;
 
@@ -270,7 +247,7 @@ void setup_prod(const ModelData& md, Workspace& ws) {
       const double one_minus = 1.0 - lam;
       if (one_minus <= 0.0) {
         // Defensive: log undefined. You can choose to stop() or handle differently.
-        stop("Encountered 1 - lambda_n <= 0 at sorted index %d (lambda=%.17g).", (int)i, lam);
+        stop("Encountered 1 - lambda_u <= 0 at sorted index %d (lambda=%.17g).", (int)i, lam);
       }
       ws.log_prefix[i + 1] = ws.log_prefix[i] + std::log(one_minus);
     } else {
@@ -280,7 +257,7 @@ void setup_prod(const ModelData& md, Workspace& ws) {
 }
 
 double evaluate(const Workspace& ws, double L, double R) {
-  // Evaluate product_{t_n* in (L, R)} (1 - lambda_n).
+  // Evaluate product_{t_n* in (L, R)} (1 - lambda_u).
   // We implement (L, R) with L open, R open by using:
   //   i = upper_bound(t_sorted, L)   -> first index with t > L
   //   j = lower_bound(t_sorted, R)   -> first index with t >= R
@@ -336,14 +313,14 @@ void print_summary(const ModelData& md, const Workspace& ws) {
               << std::endl;
 
   Rcpp::Rcout << "[calc_all] vector lengths:"
-              << " z=" << ws.z_i.size()
-              << " lambda=" << ws.lambda_n.size()
+              << " z=" << ws.z_j.size()
+              << " lambda=" << ws.lambda_u.size()
               << std::endl;
 
   // Input vectors used inside loops
   Rcpp::Rcout << "[calc_all] input vector lengths:"
-              << " ws.z_i=" << ws.z_i.size()
-              << " ws.lambda_n=" << ws.lambda_n.size()
+              << " ws.z_j=" << ws.z_j.size()
+              << " ws.lambda_n=" << ws.lambda_u.size()
               << " R_AB=" << md.R_AB.size()
               << " t_E=" << md.t_E.size()
               << " t_F=" << md.t_F.size()
@@ -354,10 +331,10 @@ void print_summary(const ModelData& md, const Workspace& ws) {
 
   Rcpp::Rcout << "[calc_all] matrix shapes (rows x cols):"
   // using arma n_rows/n_cols for arma matrices and nrow()/ncol() for Rcpp matrices
-  << " ws.mu_mi=" << ws.mu_mi.n_rows << "x" << ws.mu_mi.n_cols
-  << " ws.mu_bar_ji=" << ws.mu_bar_ji.n_rows << "x" << ws.mu_bar_ji.n_cols
-  << " ws.eta_ui=" << ws.eta_ui.n_rows << "x" << ws.eta_ui.n_cols
-  << " ws.gamma_ci=" << ws.gamma_ci.n_rows << "x" << ws.gamma_ci.n_cols
+  << " ws.P123_AB=" << ws.P123_AB.n_rows << "x" << ws.P123_AB.n_cols
+  << " ws.P123_D=" << ws.P123_D.n_rows << "x" << ws.P123_D.n_cols
+  << " ws.P123_E=" << ws.P123_E.n_rows << "x" << ws.P123_E.n_cols
+  << " ws.P123_F=" << ws.P123_F.n_rows << "x" << ws.P123_F.n_cols
   << " gamma_im=" << md.gamma_im.nrow()  << "x" << md.gamma_im.ncol()
   << " alpha_ij=" << md.alpha_ij.nrow() << "x" << md.alpha_ij.ncol()
   << " Q_j=" << md.Q_j.nrow() << "x" << md.Q_j.ncol()
@@ -381,190 +358,184 @@ void print_summary(const ModelData& md, const Workspace& ws) {
 
 void run_em_once(const ModelData& md, Workspace& ws) {
   // --- Resets temps ----------------------------------------------------------
-  ws.mu_mi.zeros(md.N_AB, md.I);
-  ws.mu_bar_ji.zeros(md.N_D, md.I_mark);
-  ws.eta_ui.zeros(md.N_E, md.I_mark);
-  ws.gamma_ci.zeros(md.N_F, md.I_mark);
+  ws.P123_AB.zeros(md.N_AB, md.I);
+  ws.P123_D.zeros(md.N_D, md.I_mark);
+  ws.P123_E.zeros(md.N_E, md.I_mark);
+  ws.P123_F.zeros(md.N_F, md.I_mark);
 
   setup_prod(md,ws);
 
   // --- Loops over I ----------------------------------------------------------
-  for(int i = 0; i < md.I; ++i) {
-    for (int l = 0; l < md.L; ++l) {
-      ws.mu_mi(l,i) = md.gamma_im(i,l) ?
-      ws.z_i[i]*evaluate(ws, md.Q_j(i,1), next_double(md.R_AB[l])) : 0;
+  for(int j = 0; j < md.I; ++j) {
 
-      ws.mu_bar_ji(l,i) = md.alpha_ij(i,l) ? ws.z_i[i] : 0;
-
-      ws.eta_ui(l,i) = md.gamma_im(i, md.N_AB + l) ? ws.lambda_n[md.lambda_M_plus_u[l]] *
-        evaluate(ws, md.Q_j(i,1), md.t_E[l]) * ws.z_i[i] : 0 ;
-
-      ws.gamma_ci(l,i) = (md.alpha_ij(i, md.N_D + l) ?
-                            ws.z_i[i] : 0) +
-                            (md.gamma_im(i, md.W + l) ?
-                            evaluate(ws, md.Q_j(i,1), next_double(md.t_F[l])) *
-                            ws.z_i[i]: 0);
+    for (int i = 0; i < md.N_AB; ++i) {
+      ws.P123_AB(i,j) = md.gamma_im(j,i) ?
+      ws.z_j[j] * evaluate(ws, md.Q_j(j,1), next_double(md.R_AB[i])) : 0;
     }
-
-    // tails
-    for (int l = md.L; l < md.N_AB; ++l) {
-      ws.mu_mi(l,i) = md.gamma_im(i,l) ?
-      ws.z_i[i] * evaluate(ws, md.Q_j(i,1), next_double(md.R_AB[l])) : 0;
+    for (int i = 0; i < md.N_D; ++i) {
+      ws.P123_D(i,j) = md.alpha_ij(j,i) ?ws.z_j[j] : 0;
     }
-    for (int l = md.L; l < md.N_D; ++l) {
-      ws.mu_bar_ji(l,i) = md.alpha_ij(i,l) ?ws.z_i[i] : 0;
+    for (int i = 0; i < md.N_E; ++i) {
+      ws.P123_E(i,j) = md.gamma_im(j, md.N_AB + i) ? ws.lambda_u[md.lambda_M_plus_u[i]] *
+        evaluate(ws, md.Q_j(j,1), md.t_E[i]) * ws.z_j[j] : 0 ;
     }
-    for (int l = md.L; l < md.N_E; ++l) {
-      ws.eta_ui(l,i) = md.gamma_im(i, md.N_AB + l) ? ws.lambda_n[md.lambda_M_plus_u[l]] *
-        evaluate(ws, md.Q_j(i,1), md.t_E[l]) * ws.z_i[i] : 0 ;
-    }
-    for (int l = md.L; l < md.N_F; ++l) {
-      ws.gamma_ci(l,i) = (md.alpha_ij(i, md.N_D + l) ?
-                            ws.z_i[i] : 0) +
-                            (md.gamma_im(i, md.W + l) ?
-                            evaluate(ws, md.Q_j(i,1), next_double(md.t_F[l])) *
-                            ws.z_i[i]: 0);
+    for (int i = 0; i < md.N_F; ++i) {
+      ws.P123_F(i,j) = (md.alpha_ij(j, md.N_D + i) ?
+                            ws.z_j[j] : 0) +
+                            (md.gamma_im(j, md.W + i) ?
+                            evaluate(ws, md.Q_j(j,1), next_double(md.t_F[i])) *
+                            ws.z_j[j]: 0);
     }
   }
 
   // --- Extra for I_mark ------------------------------------------------------
-  for(int i = md.I; i < md.I_mark; ++i) {
-    for (int l = 0; l < md.L; ++l) {
-      ws.mu_bar_ji(l,i) = md.alpha_ij(i,l) ?ws.z_i[i] : 0;
-      ws.eta_ui(l,i) = is_double_eq(md.t_E[l], md.t_CE_star[i-md.I]) ? ws.z_i[i] : 0;
-      ws.gamma_ci(l,i) = md.alpha_ij(i, md.N_D + l) ?ws.z_i[i] : 0;
+  for(int k = md.I; k < md.I_mark; ++k) {
+    for (int i = 0; i < md.N_D; ++i) {
+      ws.P123_D(i,k) = md.alpha_ij(k,i) ?ws.z_j[k] : 0;
     }
-    for (int l = md.L; l < md.N_D; ++l) {
-      ws.mu_bar_ji(l,i) = md.alpha_ij(i,l) ?ws.z_i[i] : 0;
+    for (int i = 0; i < md.N_E; ++i) {
+      ws.P123_E(i,k) = is_double_eq(md.t_E[i],md.t_CE_star[k-md.I]) ? ws.z_j[k] : 0;
     }
-    for (int l = md.L; l < md.N_E; ++l) {
-      ws.eta_ui(l,i) = is_double_eq(md.t_E[l],md.t_CE_star[i-md.I]) ? ws.z_i[i] : 0;
-    }
-    for (int l = md.L; l < md.N_F; ++l) {
-      ws.gamma_ci(l,i) = md.alpha_ij(i, md.N_D + l) ?ws.z_i[i] : 0;
+    for (int i = 0; i < md.N_F; ++i) {
+      ws.P123_F(i,k) = md.alpha_ij(k, md.N_D + i) ?ws.z_j[k] : 0;
     }
   }
 
   // --- Normalizes rows -------------------------------------------------------
-  ws.mu_mi = arma::normalise(ws.mu_mi, 1, 1);
-  ws.mu_bar_ji = arma::normalise(ws.mu_bar_ji, 1, 1);
-  ws.eta_ui = arma::normalise(ws.eta_ui, 1, 1);
-  ws.gamma_ci = arma::normalise(ws.gamma_ci, 1, 1);
+  ws.P123_AB = arma::normalise(ws.P123_AB, 1, 1);
+  ws.P123_D = arma::normalise(ws.P123_D, 1, 1);
+  ws.P123_E = arma::normalise(ws.P123_E, 1, 1);
+  ws.P123_F = arma::normalise(ws.P123_F, 1, 1);
 
-  double sum_rho_n;
-  double sum_pi_n;
-  double sum_pi_full_n;
-  double sum_sigma_n;
-  double d_n_part;
+  double sum_P2_AB_u;
+  double sum_P23_A_u;
+  double sum_P2_B_extra_u; // for the t_AE^*>t_Bi part
+  double sum_P23_B_u;
+  double sum_P2_D_u;
+  double sum_P23_D_u;
+  double sum_P23_E_u;
+  double sum_P2_E_u;
+  double sum_P23_F_u;
+  double sum_P2_F_u;
+
 
   // --- Loops over N_AE_star ----------------------------------------------------------
-  for(int n = 0; n < md.N_AE_star; ++n) {
-    sum_rho_n = 0;
-    sum_pi_n = 0;
-    sum_pi_full_n = 0;
-    sum_sigma_n = 0;
-    d_n_part = 0;
+  for(int u = 0; u < md.N_AE_star; ++u) {
+    sum_P2_AB_u = 0;
+    sum_P23_A_u = 0;
+    sum_P2_B_extra_u = 0;
+    sum_P23_B_u = 0;
+    sum_P2_D_u = 0;
+    sum_P23_D_u = 0;
+    sum_P2_F_u = 0;
+    sum_P23_F_u = 0;
+    sum_P2_E_u = 0;
+    sum_P23_E_u = 0;
 
+    // P23_A
+    sum_P23_A_u = u <= md.N_A_star ? md.r_A[u] : 0;
 
-    d_n_part = n <= md.N_A_star ? md.r_A[n] : 0;
-    for (int l = 0; l < md.L; ++l) {
-      // rho_mn
-      if(md.I_rho_mn(l,n)) {
-        for(int i = 0; i < md.I; ++i) {
-          sum_rho_n +=
-            md.L_AB[l] <= md.Q_j(i,0) && md.Q_j(i,1) < md.t_AE_star[n] ?
-            ws.mu_mi(l,i) : 0;
+    for (int i = 0; i < md.N_AB; ++i) {
+      // P2_A
+      if(md.t_AE_star[u] <= md.t_AB[i]) {
+        for(int j = 0; j < md.I; ++j) {
+          sum_P2_AB_u +=
+            md.L_AB[i] <= md.Q_j(j,0) && md.Q_j(j,1) < md.t_AE_star[u] ?
+            ws.P123_AB(i,j) : 0;
         }
       }
-      // pi_un
-      if(md.I_pi_un(l,n)) {
-        for(int i = 0; i < md.I; ++i) {
-          sum_pi_n +=
-            md.L_E[l] <= md.Q_j(i,0) && md.Q_j(i,1) < md.t_AE_star[n] ?
-            ws.eta_ui(l,i) : 0;
-
-          sum_pi_full_n += md.t_E[l] == md.t_AE_star[n] ? ws.eta_ui(l,i) : 0;
-        }
-      }
-      // sigma_cn
-      if(md.I_sigma_cn(l,n)) {
-        for(int i = 0; i < md.I; ++i) {
-          sum_sigma_n +=
-            md.L_F[l] <= md.Q_j(i,0) && md.Q_j(i,1) < md.t_AE_star[n] ?
-            ws.gamma_ci(l,i) : 0;
-        }
-      }
-
-    }
-    for (int l = md.L; l < md.N_AB; ++l) {
-      // rho_mn
-      if(md.I_rho_mn(l,n)) {
-        for(int i = 0; i < md.I; ++i) {
-          sum_rho_n +=
-            md.L_AB[l] <= md.Q_j(i,0) && md.Q_j(i,1) < md.t_AE_star[n] ?
-            ws.mu_mi(l,i) : 0;
+      // if N_A + N_B = N_AB, we sum over the N_B part as well
+      if (i >= md.N_A) {
+        // P2_B
+        // P2_AB
+        if(md.t_AE_star[u] > md.t_AB[i]) {
+          double eval_B_part = evaluate(ws, md.t_AB[i], md.t_AE_star[u]);
+          sum_P2_B_extra_u += eval_B_part;
+          sum_P23_B_u += ws.lambda_u[u] * eval_B_part;
         }
       }
     }
-    for (int l = md.L; l < md.N_E; ++l) {
-      // pi_un
-      if(md.I_pi_un(l,n)) {
-        for(int i = 0; i < md.I; ++i) {
-          sum_pi_n +=
-            md.L_E[l] <= md.Q_j(i,0) && md.Q_j(i,1) < md.t_AE_star[n] ?
-            ws.eta_ui(l,i) : 0;
-
-          sum_pi_full_n += is_double_eq(md.t_E[l], md.t_AE_star[n]) ? ws.eta_ui(l,i) : 0;
+    for (int i = 0; i < md.N_D; ++i) {
+      // P2_D
+      if(md.t_D[i] < md.t_AE_star[u]) {
+        double eval_D_part = 0;
+        for(int j = 0; j < md.I; ++j) {
+          eval_D_part += md.t_D[i] <= md.Q_j(j,0) && md.Q_j(j,1) < md.t_AE_star[u] ?
+                              ws.z_j[j] * evaluate(ws, md.Q_j(j,1), md.t_AE_star[u]) : 0;
         }
-      }
-    }
-    for (int l = md.L; l < md.N_F; ++l) {
-      // sigma_cn
-      if(md.I_sigma_cn(l,n)) {
-        for(int i = 0; i < md.I; ++i) {
-          sum_sigma_n +=
-            md.L_F[l] <= md.Q_j(i,0) && md.Q_j(i,1) < md.t_AE_star[n] ?
-            ws.gamma_ci(l,i) : 0;
-        }
+        sum_P2_D_u += eval_D_part;
+        sum_P23_D_u += ws.lambda_u[u] * eval_D_part;
       }
     }
 
-    // Rcpp::Rcout << "[em_fit] sum sum_pi_full_n " << sum_pi_full_n << std::endl;
+    for (int i = 0; i < md.N_E; ++i) {
+      // P2_E
+      if(md.t_AE_star[u] <= md.t_E[i]) {
+        for(int j = 0; j < md.I; ++j) {
+          sum_P2_E_u +=
+            md.L_E[i] <= md.Q_j(j,0) && md.Q_j(j,1) < md.t_AE_star[u] ?
+            ws.P123_E(i,j) : 0;
 
-    double demon = sum_rho_n + sum_pi_n + sum_sigma_n;
+          sum_P23_E_u += is_double_eq(md.t_E[i], md.t_AE_star[u]) ? ws.P123_E(i,j) : 0;
+        }
+      }
+    }
+    for (int i = 0; i < md.N_F; ++i) {
+      // P2_F
+      double eval_part_F = 0;
+      if(md.t_AE_star[u] <= md.t_F[i]) {
+        for(int j = 0; j < md.I; ++j) {
+          eval_part_F =
+            md.L_F[i] <= md.Q_j(j,0) && md.Q_j(j,1) < md.t_AE_star[u] ?
+            ws.P123_F(i,j) : 0;
+
+          sum_P2_F_u += eval_part_F;
+        }
+      } else {
+        for(int j = 0; j < md.I; ++j) {
+          eval_part_F =  md.Q_j(j,0) && md.Q_j(j,1) < md.t_AE_star[u] ?
+            ws.z_j[j]* evaluate(ws, md.Q_j(j,1), md.t_AE_star[u]) : 0;
+        }
+      }
+      sum_P23_F_u += ws.lambda_u[u] * eval_part_F;
+    }
+
+    // Rcpp::Rcout << "[em_fit] sum sum_P23_E_u " << sum_P23_E_u << std::endl;
+
+    double demon = sum_P2_AB_u + sum_P2_B_extra_u + sum_P2_D_u + sum_P2_E_u + sum_P2_F_u;
     //Rcpp::Rcout << "[em_fit] demon is " << demon << std::endl;
 
-    ws.lambda_n[n] = (d_n_part + sum_pi_full_n)/demon;
+    ws.lambda_u[u] = (sum_P23_A_u + sum_P23_B_u + sum_P23_D_u + sum_P23_E_u + sum_P23_F_u)/demon;
 
-    // if lambda_n[n] is larger than 1, we set it to 0.05
-    if(ws.lambda_n[n] > 1.0){
+    // if lambda_u[u] is larger than 1, we set it to 0.05
+    if(ws.lambda_u[u] > 1.0){
 
-     // Rcpp::Rcout << "[em_fit] Warning: lambda_n[" << n << "] > 1.0" << std::endl;
-     // Rcpp::Rcout << "[em_fit] Corresponding to t_AE_star[" << n << "] = " << md.t_AE_star[n] << std::endl;
-      ws.lambda_n[n] = 0.05;
+     // Rcpp::Rcout << "[em_fit] Warning: lambda_u[" << u << "] > 1.0" << std::endl;
+     // Rcpp::Rcout << "[em_fit] Corresponding to t_AE_star[" << u << "] = " << md.t_AE_star[u] << std::endl;
+      ws.lambda_u[u] = 0.05;
     }
 
   }
 
   // --- Calculates new z ------------------------------------------------------
-  arma::rowvec base = arma::sum(ws.mu_bar_ji, 0);
-  base += arma::sum(ws.eta_ui, 0);
-  base += arma::sum(ws.gamma_ci, 0);
+  arma::rowvec base = arma::sum(ws.P123_D, 0);
+  base += arma::sum(ws.P123_E, 0);
+  base += arma::sum(ws.P123_F, 0);
   arma::rowvec new_z = base;
 
-  new_z.head(md.I) += arma::sum(ws.mu_mi, 0);
+  new_z.head(md.I) += arma::sum(ws.P123_AB, 0);
   if(md.r_C.n_elem > 0) {
     new_z.subvec(md.I, md.I_mark - 1) += md.r_C;
   }
   new_z /= md.N;
 
-  // // normalize z_i to sum to 1
+  // // normalize z_j to sum to 1
   // new_z /= arma::accu(new_z);
 
-  ws.z_i = new_z;
+  ws.z_j = new_z;
 
 
-  //Rcpp::Rcout << "[em_fit] eta is " << ws.eta_ui << std::endl;
+  //Rcpp::Rcout << "[em_fit] eta is " << ws.P123_E << std::endl;
 }
 
 
@@ -582,57 +553,57 @@ Rcpp::List em_fit(SEXP md_ptr,
   Workspace ws;
 
   const arma::uword I_mark = static_cast<arma::uword>(md.I_mark);
-  ws.z_i.set_size(I_mark);
+  ws.z_j.set_size(I_mark);
   if (z_init.isNotNull()) {
     Rcpp::NumericVector z = z_init.get();
     if (static_cast<arma::uword>(z.size()) != I_mark)
       Rcpp::stop("length(z_init) must equal I_mark");
-    for (arma::uword i = 0; i < I_mark; ++i) ws.z_i[i] = z[i];
+    for (arma::uword i = 0; i < I_mark; ++i) ws.z_j[i] = z[i];
   } else {
-    ws.z_i.fill(1.0 / static_cast<double>(I_mark));
+    ws.z_j.fill(1.0 / static_cast<double>(I_mark));
   }
 
-  // make sure that z_i sums to 1
-  ws.z_i /= arma::accu(ws.z_i);
-  // print initial sum of z_i for debugging
+  // make sure that z_j sums to 1
+  ws.z_j /= arma::accu(ws.z_j);
+  // print initial sum of z_j for debugging
   if (verbose) {
-    double z_sum_init = arma::accu(ws.z_i);
-    Rcpp::Rcout << "[em_fit] Initial sum(z_i) = " << z_sum_init << std::endl;
+    double z_sum_init = arma::accu(ws.z_j);
+    Rcpp::Rcout << "[em_fit] Initial sum(z_j) = " << z_sum_init << std::endl;
   }
 
 
   const arma::uword N_AE_star = static_cast<arma::uword>(md.t_AE_star.size());
-  ws.lambda_n.set_size(N_AE_star);
+  ws.lambda_u.set_size(N_AE_star);
   if (lambda_init.isNotNull()) {
     Rcpp::NumericVector lam = lambda_init.get();
     if (static_cast<arma::uword>(lam.size()) != N_AE_star)
       Rcpp::stop("length(lambda_init) must equal N_AE_star (length(t_AE_star))");
-    for (arma::uword n = 0; n < N_AE_star; ++n) ws.lambda_n[n] = lam[n];
+    for (arma::uword n = 0; n < N_AE_star; ++n) ws.lambda_u[n] = lam[n];
   } else {
-    ws.lambda_n.fill(0.005);
+    ws.lambda_u.fill(0.005);
   }
 
   double dz = 0.0, dl = 0.0;
   for (int iter = 0; iter < max_iter; ++iter) {
-    arma::rowvec prev_lambda_n = ws.lambda_n; // copy
-    arma::rowvec prev_z_i      = ws.z_i;      // copy
+    arma::rowvec prev_lambda_u = ws.lambda_u; // copy
+    arma::rowvec prev_z_i      = ws.z_j;      // copy
 
     run_em_once(md, ws);
 
     dz = 0.0; dl = 0.0;
     for (arma::uword i = 0; i < I_mark; ++i)
-      dz = std::max(dz, std::abs(ws.z_i[i] - prev_z_i[i]));
+      dz = std::max(dz, std::abs(ws.z_j[i] - prev_z_i[i]));
     for (arma::uword n = 0; n < N_AE_star; ++n)
-      dl = std::max(dl, std::abs(ws.lambda_n[n] - prev_lambda_n[n]));
+      dl = std::max(dl, std::abs(ws.lambda_u[n] - prev_lambda_u[n]));
 
     if (verbose) {
       if(iter % 10 == 0 || iter == max_iter - 1){
           Rcpp::Rcout << "iter " << (iter + 1)
                       << ": max|Δz|=" << dz
                       << " max|Δλ|=" << dl << "\n";
-          // print sum of z_i for debugging
-          double z_sum = arma::accu(ws.z_i);
-          Rcpp::Rcout << "[em_fit] sum(z_i) = " << z_sum << std::endl;
+          // print sum of z_j for debugging
+          double z_sum = arma::accu(ws.z_j);
+          Rcpp::Rcout << "[em_fit] sum(z_j) = " << z_sum << std::endl;
       }
     }
 
@@ -659,14 +630,14 @@ Rcpp::List em_fit(SEXP md_ptr,
 
 
   return Rcpp::List::create(
-    Rcpp::_["z_i"]      = ws.z_i,
-    Rcpp::_["lambda_n"] = ws.lambda_n,
+    Rcpp::_["z_i"]      = ws.z_j,
+    Rcpp::_["lambda_n"] = ws.lambda_u,
     Rcpp::_["alpha_ij"] = md.alpha_ij,
     Rcpp::_["gamma_im"]  = md.gamma_im,
-    Rcpp::_["mu_mi"]        = ws.mu_mi,
-    Rcpp::_["mu_bar_ji"]    = ws.mu_bar_ji,
-    Rcpp::_["eta_ui"]       = ws.eta_ui,
-    Rcpp::_["gamma_ci"]     = ws.gamma_ci,
+    Rcpp::_["P123_AB"]        = ws.P123_AB,
+    Rcpp::_["P123_D"]    = ws.P123_D,
+    Rcpp::_["P123_E"]       = ws.P123_E,
+    Rcpp::_["P123_F"]     = ws.P123_F,
     Rcpp::_["converged"]    = converged
   );
 }

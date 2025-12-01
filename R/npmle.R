@@ -119,7 +119,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   idx_N_tilde <- is_ill & is_dead
   N_A <- sum(idx_N_tilde)
   t_A <- data$T_obs[idx_N_tilde]
-
+  N_B <- N_AB - N_A
   stopifnot(N_A <= N_AB)
 
   # N_C observations with direct transition 1 → 3, no missing transitions T_obs = V_healthy:
@@ -229,7 +229,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   I_mark <- I + N_CE_star
   data_list <- list(
     # ints
-    N_D = N_D, N_F = N_F, N_C = N_C, N_E = N_E, N_A = N_A,
+    N_D = N_D, N_F = N_F, N_C = N_C, N_E = N_E, N_A = N_A, N_B = N_B,
     N_A_star = N_A_star, N_AB = N_AB, W = W, N_AE_star = N_AE_star,
     N_ABEF = N_ABEF, I = I,
     N_CE_star = N_CE_star, I_mark = I_mark,
