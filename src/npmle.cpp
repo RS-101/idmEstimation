@@ -9,7 +9,7 @@ using namespace Rcpp;
 
 struct ModelData {
   // --- counts (ints) ---
-  int N_D, N_F, N_C, N_E, N_A, N_A_star, N_AB, N_B, W,
+  int N_D, N_F, N_C, N_E, N_A, N_A_star, N_AB, N_B, N_ABE,
   N_AE_star, N, N_ABEF, N_CE_star, I, I_mark,
   L; // min of N_AB, N_E, N_F for loops
 
@@ -115,11 +115,11 @@ struct ModelData {
     if ((int)t_CE_star.size() != (I_mark - I))
       stop("length(t_CE_star) != I_mark - I");
 
-    // gamma_im indexing uses offsets N_AB+l and W+l
+    // gamma_im indexing uses offsets N_AB+l and N_ABE+l
     if (N_AB + N_E > N_ABEF)
       stop("N_AB + N_E must be <= N_ABEF for gamma_im(i, N_AB + l)");
-    if (W + N_F > N_ABEF)
-      stop("W + N_F must be <= N_ABEF for gamma_im(i, W + l)");
+    if (N_ABE + N_F > N_ABEF)
+      stop("N_ABE + N_F must be <= N_ABEF for gamma_im(i, N_ABE + l)");
   }
 
 
@@ -133,7 +133,7 @@ struct ModelData {
     N_A = as<int>(x["N_A"]);
     N_A_star = as<int>(x["N_A_star"]);
     N_AB  = as<int>(x["N_AB"]);
-    W  = as<int>(x["W"]);
+    N_ABE  = as<int>(x["N_ABE"]);
     N_AE_star  = as<int>(x["N_AE_star"]);
     N = as<int>(x["N"]);
     N_ABEF = as<int>(x["N_ABEF"]);
@@ -307,7 +307,7 @@ void print_summary(const ModelData& md, const Workspace& ws) {
               << " N_D=" << md.N_D
               << " N_E=" << md.N_E
               << " N_F=" << md.N_F
-              << " W=" << md.W
+              << " N_ABE=" << md.N_ABE
               << " t_AE_star=" << md.t_AE_star.size()
               << " N=" << md.N
               << std::endl;
@@ -356,6 +356,71 @@ void print_summary(const ModelData& md, const Workspace& ws) {
 
 }
 
+double calculate_likelihood(const ModelData& md, const Workspace& ws) {
+  double loglik = 0.0;
+
+
+  // Recall that gamma and alpha are logical matrices (indicators)
+
+  // A_23{lambda} part
+  for(int u = 0; u < md.N_AE_star; ++u) {
+    loglik += md.r_A[u] * std::log(ws.lambda_u[u]);
+  }
+
+  // AB part
+  for(int i = 0; i < md.N_AB; ++i) {
+    // sum over I_mark
+    loglik += std::log(evaluate(ws, md.R_AB[i], md.t_AB[i]));
+
+    double AB_likelihood = 0.0;
+    for(int j = 0; j < md.I_mark; ++j) {
+      AB_likelihood += md.gamma_im(j,i) ? ws.z_j[j] * evaluate(ws, md.Q_j(j,1), next_double(md.R_AB[i])) : 0 ;
+    }
+    loglik += std::log(AB_likelihood);
+  }
+
+  // C part
+  for(int k = md.I; k < md.I_mark; ++k) {
+    loglik += md.r_C[k - md.I] * std::log(ws.z_j[k]);
+  }
+
+  // D part
+  for(int i = 0; i < md.N_D; ++i) {
+    double D_likelihood = 0.0;
+    // sum over I_mark multiply alpha z_j
+    for(int j = 0; j < md.I_mark; ++j) {
+      D_likelihood += md.alpha_ij(j,i) ? ws.z_j[j] : 0;
+    }
+    loglik += std::log(D_likelihood);
+  }
+  for(int i = 0; i < md.N_E; ++i) {
+    double E_likelihood = 0.0;
+
+    for(int j = 0; j < md.I; ++j) {
+      E_likelihood += md.gamma_im(j, md.N_AB + i) ? ws.lambda_u[md.lambda_M_plus_u[i]] * ws.z_j[j] *
+      evaluate(ws, md.Q_j(j,1), md.t_E[i]) : 0;
+    }
+    for(int j = md.I; j < md.I_mark; ++j) {
+      E_likelihood += is_double_eq(md.t_E[i],md.t_CE_star[j - md.I]) ? ws.z_j[j] : 0;
+    }
+
+    loglik += std::log(E_likelihood);
+  }
+  for(int i = 0; i < md.N_F; ++i) {
+    double F_likelihood = 0.0;
+    for(int j = 0; j < md.I_mark; ++j) {
+      F_likelihood += (md.alpha_ij(j, md.N_D + i) ?
+                            ws.z_j[j] : 0);
+
+      F_likelihood += j < md.I ? (md.gamma_im(j, md.N_ABE + i) ?
+      evaluate(ws, md.Q_j(j,1), next_double(md.t_F[i])) * ws.z_j[j]: 0) : 0;
+    }
+    loglik += std::log(F_likelihood);
+  }
+  return loglik;
+}
+
+
 void run_em_once(const ModelData& md, Workspace& ws) {
   // --- Resets temps ----------------------------------------------------------
   ws.P123_AB.zeros(md.N_AB, md.I);
@@ -382,7 +447,7 @@ void run_em_once(const ModelData& md, Workspace& ws) {
     for (int i = 0; i < md.N_F; ++i) {
       ws.P123_F(i,j) = (md.alpha_ij(j, md.N_D + i) ?
                             ws.z_j[j] : 0) +
-                            (md.gamma_im(j, md.W + i) ?
+                            (md.gamma_im(j, md.N_ABE + i) ?
                             evaluate(ws, md.Q_j(j,1), next_double(md.t_F[i])) *
                             ws.z_j[j]: 0);
     }
@@ -545,11 +610,15 @@ Rcpp::List em_fit(SEXP md_ptr,
                   Rcpp::Nullable<Rcpp::NumericVector> lambda_init = R_NilValue,
                   int max_iter = 100,
                   double tol = 1e-3,
-                  bool verbose = true) {
+                  bool verbose = true,
+                  bool eval_likelihood = false) {
 
   Rcpp::XPtr<ModelData> p(md_ptr);
   const ModelData& md = *p;
   bool converged = false;
+  // vector for evaluations of likelihood at each iteration
+  std::vector<double> likelihoods;
+
   Workspace ws;
 
   const arma::uword I_mark = static_cast<arma::uword>(md.I_mark);
@@ -590,11 +659,22 @@ Rcpp::List em_fit(SEXP md_ptr,
 
     run_em_once(md, ws);
 
+
+    if(eval_likelihood) {
+      likelihoods.push_back(calculate_likelihood(md, ws));
+    }
+
+
     dz = 0.0; dl = 0.0;
     for (arma::uword i = 0; i < I_mark; ++i)
       dz = std::max(dz, std::abs(ws.z_j[i] - prev_z_i[i]));
     for (arma::uword n = 0; n < N_AE_star; ++n)
       dl = std::max(dl, std::abs(ws.lambda_u[n] - prev_lambda_u[n]));
+
+
+
+
+
 
     if (verbose) {
       if(iter % 10 == 0 || iter == max_iter - 1){
@@ -638,6 +718,7 @@ Rcpp::List em_fit(SEXP md_ptr,
     Rcpp::_["P123_D"]    = ws.P123_D,
     Rcpp::_["P123_E"]       = ws.P123_E,
     Rcpp::_["P123_F"]     = ws.P123_F,
-    Rcpp::_["converged"]    = converged
+    Rcpp::_["converged"]    = converged,
+    Rcpp::_["likelihoods"] = likelihoods
   );
 }
