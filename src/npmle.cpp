@@ -498,7 +498,7 @@ double calculate_likelihood(const ModelData& md, const Workspace& ws) {
   // Recall that gamma and alpha are logical matrices (indicators)
 
   // A_23{lambda} part
-  for(int u = 0; u < md.N_AE_star; ++u) {
+  for(int u = 0; u < md.N_A_star; ++u) {
     loglik += md.r_A[u] * std::log(ws.lambda_u[u]);
   }
 
