@@ -29,19 +29,19 @@ struct ModelData {
   NumericMatrix LR_AB, LR_E, LR_F, LR_ABEF, Q_j;
 
   // --- Indicator matrices ---
-  LogicalMatrix alpha_ij;  // I_mark x (N_D+N_F), my alpha + beta
-  LogicalMatrix gamma_im;   // I x N_ABEF, my gamma
+  LogicalMatrix alpha_ji;  // I_mark x (N_D+N_F), my alpha + beta
+  LogicalMatrix gamma_ji;   // I x N_ABEF, my gamma
 
   // ---------- (18) alpha: I' x (N_D+N_F) ----------
   void cal_alpha() {
     int I = Q_j.nrow();
     int N_DF = t_DF.size();
 
-    alpha_ij = Rcpp::LogicalMatrix(I_mark, N_DF);
-    for (int i = 0; i < I_mark; ++i) {
-      double left = (i < I) ? Q_j(i,0) : t_CE_star[i - I];
-      for (int j = 0; j < N_DF; ++j)
-        alpha_ij(i,j) = (t_DF[j] <= left);
+    alpha_ji = Rcpp::LogicalMatrix(I_mark, N_DF);
+    for (int j = 0; j < I_mark; ++j) {
+      double left = (j < I) ? Q_j(j,0) : t_CE_star[j - I];
+      for (int i = 0; i < N_DF; ++i)
+        alpha_ji(j,i) = (t_DF[i] <= left);
     }
   }
 
@@ -49,13 +49,13 @@ struct ModelData {
   void cal_gamma() {
     int I = Q_j.nrow();
     int N_ABEF = LR_ABEF.nrow();
-    gamma_im = Rcpp::LogicalMatrix(I, N_ABEF);
+    gamma_ji = Rcpp::LogicalMatrix(I, N_ABEF);
 
     for (int i = 0; i < I; ++i) {
       double Li = Q_j(i,0), Ri = Q_j(i,1);
       for (int m = 0; m < N_ABEF; ++m) {
         double Lm = LR_ABEF(m,0), Rm = LR_ABEF(m,1);
-        gamma_im(i,m) = (Lm <= Li && Ri <= Rm);
+        gamma_ji(i,m) = (Lm <= Li && Ri <= Rm);
       }
     }
   }
@@ -114,11 +114,11 @@ struct ModelData {
     if ((int)t_CE_star.size() != (I_mark - I))
       stop("length(t_CE_star) != I_mark - I");
 
-    // gamma_im indexing uses offsets N_AB+l and N_ABE+l
+    // gamma_ji indexing uses offsets N_AB+l and N_ABE+l
     if (N_AB + N_E > N_ABEF)
-      stop("N_AB + N_E must be <= N_ABEF for gamma_im(i, N_AB + l)");
+      stop("N_AB + N_E must be <= N_ABEF for gamma_ji(i, N_AB + l)");
     if (N_ABE + N_F > N_ABEF)
-      stop("N_ABE + N_F must be <= N_ABEF for gamma_im(i, N_ABE + l)");
+      stop("N_ABE + N_F must be <= N_ABEF for gamma_ji(i, N_ABE + l)");
   }
 
 
@@ -334,8 +334,8 @@ void print_summary(const ModelData& md, const Workspace& ws) {
   << " ws.P123_D=" << ws.P123_D.n_rows << "x" << ws.P123_D.n_cols
   << " ws.P123_E=" << ws.P123_E.n_rows << "x" << ws.P123_E.n_cols
   << " ws.P123_F=" << ws.P123_F.n_rows << "x" << ws.P123_F.n_cols
-  << " gamma_im=" << md.gamma_im.nrow()  << "x" << md.gamma_im.ncol()
-  << " alpha_ij=" << md.alpha_ij.nrow() << "x" << md.alpha_ij.ncol()
+  << " gamma_ji=" << md.gamma_ji.nrow()  << "x" << md.gamma_ji.ncol()
+  << " alpha_ji=" << md.alpha_ji.nrow() << "x" << md.alpha_ji.ncol()
   << " Q_j=" << md.Q_j.nrow() << "x" << md.Q_j.ncol()
   << std::endl;
 
@@ -365,37 +365,37 @@ void run_em_once(const ModelData& md, Workspace& ws) {
   setup_prod(md,ws);
 
   // --- Loops over I ----------------------------------------------------------
-  for(int j_index = 0; j_index < md.I; ++j_index) {
+  for(int j = 0; j < md.I; ++j) {
     for (int i = 0; i < md.N_AB; ++i) {
-      ws.P123_AB(i,j_index) = md.gamma_im(j_index,i) ?
-      ws.z_j[j_index] * evaluate(ws, md.Q_j(j_index,1), next_double(md.R_AB[i])) : 0;
+      ws.P123_AB(i,j) = md.gamma_ji(j,i) ?
+      ws.z_j[j] * evaluate(ws, md.Q_j(j,1), next_double(md.R_AB[i])) : 0;
     }
     for (int i = 0; i < md.N_D; ++i) {
-      ws.P123_D(i,j_index) = md.alpha_ij(j_index,i) ?ws.z_j[j_index] : 0;
+      ws.P123_D(i,j) = md.alpha_ji(j,i) ?ws.z_j[j] : 0;
     }
     for (int i = 0; i < md.N_E; ++i) {
-      ws.P123_E(i,j_index) = md.gamma_im(j_index, md.N_AB + i) ? ws.lambda_u[md.lambda_M_plus_u[i]] *
-        evaluate(ws, md.Q_j(j_index,1), md.t_E[i]) * ws.z_j[j_index] : 0 ;
+      ws.P123_E(i,j) = md.gamma_ji(j, md.N_AB + i) ? ws.lambda_u[md.lambda_M_plus_u[i]] *
+        evaluate(ws, md.Q_j(j,1), md.t_E[i]) * ws.z_j[j] : 0 ;
     }
     for (int i = 0; i < md.N_F; ++i) {
-      ws.P123_F(i,j_index) = (md.alpha_ij(j_index, md.N_D + i) ?
-                            ws.z_j[j_index] : 0) +
-                            (md.gamma_im(j_index, md.N_ABE + i) ?
-                            evaluate(ws, md.Q_j(j_index,1), next_double(md.t_F[i])) *
-                            ws.z_j[j_index]: 0);
+      ws.P123_F(i,j) = (md.alpha_ji(j, md.N_D + i) ?
+                            ws.z_j[j] : 0) +
+                            (md.gamma_ji(j, md.N_ABE + i) ?
+                            evaluate(ws, md.Q_j(j,1), next_double(md.t_F[i])) *
+                            ws.z_j[j]: 0);
     }
   }
 
   // --- Extra for I_mark ------------------------------------------------------
-  for(int j_index = md.I; j_index < md.I_mark; ++j_index) {
+  for(int j = md.I; j < md.I_mark; ++j) {
     for (int i = 0; i < md.N_D; ++i) {
-      ws.P123_D(i,j_index) = md.alpha_ij(j_index,i) ?ws.z_j[j_index] : 0;
+      ws.P123_D(i,j) = md.alpha_ji(j,i) ?ws.z_j[j] : 0;
     }
     for (int i = 0; i < md.N_E; ++i) {
-      ws.P123_E(i,j_index) = is_double_eq(md.t_E[i],md.t_CE_star[j_index-md.I]) ? ws.z_j[j_index] : 0;
+      ws.P123_E(i,j) = is_double_eq(md.t_E[i],md.t_CE_star[j-md.I]) ? ws.z_j[j] : 0;
     }
     for (int i = 0; i < md.N_F; ++i) {
-      ws.P123_F(i,j_index) = md.alpha_ij(j_index, md.N_D + i) ?ws.z_j[j_index] : 0;
+      ws.P123_F(i,j) = md.alpha_ji(j, md.N_D + i) ?ws.z_j[j] : 0;
     }
   }
 
@@ -423,32 +423,32 @@ void run_em_once(const ModelData& md, Workspace& ws) {
     for (int i = 0; i < md.N_AB; ++i) {
       // rho_mn
       if(md.t_AB[i] >= md.t_AE_star[n]) {
-        for(int j_index = 0; j_index < md.I; ++j_index) {
+        for(int j = 0; j < md.I; ++j) {
           sum_rho_n +=
-            md.L_AB[i] <= md.Q_j(j_index,0) && md.Q_j(j_index,1) < md.t_AE_star[n] ?
-            ws.P123_AB(i,j_index) : 0;
+            md.L_AB[i] <= md.Q_j(j,0) && md.Q_j(j,1) < md.t_AE_star[n] ?
+            ws.P123_AB(i,j) : 0;
         }
       }
     }
     for (int i = 0; i < md.N_E; ++i) {
       // pi_un
       if(md.t_E[i] >= md.t_AE_star[n]) {
-        for(int j_index = 0; j_index < md.I; ++j_index) {
+        for(int j = 0; j < md.I; ++j) {
           sum_pi_n +=
-            md.L_E[i] <= md.Q_j(j_index,0) && md.Q_j(j_index,1) < md.t_AE_star[n] ?
-            ws.P123_E(i,j_index) : 0;
+            md.L_E[i] <= md.Q_j(j,0) && md.Q_j(j,1) < md.t_AE_star[n] ?
+            ws.P123_E(i,j) : 0;
 
-          sum_pi_full_n += is_double_eq(md.t_E[i], md.t_AE_star[n]) ? ws.P123_E(i,j_index) : 0;
+          sum_pi_full_n += is_double_eq(md.t_E[i], md.t_AE_star[n]) ? ws.P123_E(i,j) : 0;
         }
       }
     }
     for (int i = 0; i < md.N_F; ++i) {
       // sigma_cn
       if(md.t_F[i] >= md.t_AE_star[n]) {
-        for(int j_index = 0; j_index < md.I; ++j_index) {
+        for(int j = 0; j < md.I; ++j) {
           sum_sigma_n +=
-            md.L_F[i] <= md.Q_j(j_index,0) && md.Q_j(j_index,1) < md.t_AE_star[n] ?
-            ws.P123_F(i,j_index) : 0;
+            md.L_F[i] <= md.Q_j(j,0) && md.Q_j(j,1) < md.t_AE_star[n] ?
+            ws.P123_F(i,j) : 0;
         }
       }
     }
@@ -585,8 +585,8 @@ Rcpp::List em_fit(SEXP md_ptr,
   return Rcpp::List::create(
     Rcpp::_["z_j"]      = ws.z_j,
     Rcpp::_["lambda_u"] = ws.lambda_u,
-    Rcpp::_["alpha_ij"] = md.alpha_ij,
-    Rcpp::_["gamma_im"]  = md.gamma_im,
+    Rcpp::_["alpha_ji"] = md.alpha_ji,
+    Rcpp::_["gamma_ji"]  = md.gamma_ji,
     Rcpp::_["P123_AB"]        = ws.P123_AB,
     Rcpp::_["P123_D"]    = ws.P123_D,
     Rcpp::_["P123_E"]       = ws.P123_E,
