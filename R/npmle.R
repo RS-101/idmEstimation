@@ -255,8 +255,36 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     LR_ABEF = to_mat(LR_ABEF), Q_j = to_mat(Q_j)
   )
 
+  mod_data_list <- list(
+    counts = list(
+      N_D = N_D, N_F = N_F, N_C = N_C, N_E = N_E, N_A = N_A,
+      N_B = N_B, N_A_star = N_A_star, N_AB = N_AB, N_ABE = N_ABE,
+      N_AE_star = N_AE_star, N_ABEF = N_ABEF, I = I,
+      N_CE_star = N_CE_star, I_mark = I_mark,
+      N = N_ABEFCD
+    ),
 
-  data_list
+    maxs = list(
+      s_max = s_max, R_max = R_max, e_star_max = e_star_max
+    ),
+
+    # vectors
+    data_vectors = list(
+      t_D = t_D, L_F = L_F, t_F = t_F, t_C = t_C,
+      L_E = L_E, t_E = t_E,
+      L_AB = L_AB, R_AB = R_AB,     # then in C++ read x["R_AB"]
+      t_AB = t_AB,
+      t_DF = t_DF,r_C = r_C, r_A = r_A
+    ),
+
+    support_point = list(
+      t_CE_star = t_CE_star, t_AE_star = t_AE_star,
+      Q = Q, Q_i_mark = Q_i_mark
+    )
+  )
+
+  list(data_list_to_cpp = data_list,
+       data_list_to_read = mod_data_list)
 }
 
 find_estimator_from_z_and_lambda <- function(grid_points, z_i, lambda_n, Q_j, Q_i_mark, t_AE_star, t_CE_star) {
@@ -342,33 +370,38 @@ find_estimator_from_z_and_lambda <- function(grid_points, z_i, lambda_n, Q_j, Q_
 fit_npmle <- function(data,
                       max_iter = 200,
                       tol = 1e-4,
-                      verbose = FALSE) {
+                      verbose = FALSE,
+                      eval_likelihood = FALSE) {
 
 
-  data_list <- data_to_list_format(data)
-  mdl_ptr <- make_model_data(data_list)
+  lists <- data_to_list_format(data)
 
-  z_init <- runif(data_list$I_mark)
+  data_list_to_cpp <- lists$data_list_to_cpp
+
+  mdl_ptr <- make_model_data(data_list_to_cpp)
+
+  z_init <- runif(data_list_to_cpp$I_mark)
 
   z_init <- z_init/sum(z_init)
 
-  lambda_init <- runif(data_list$N_AE_star,min = 0.00001, max = 0.1)
+  lambda_init <- runif(data_list_to_cpp$N_AE_star,min = 0.00001, max = 0.1)
 
   fit <- em_fit(mdl_ptr,
                 z_init = z_init,
                 lambda_init = lambda_init,
                 max_iter = max_iter,
                 tol = tol,
-                verbose = verbose)
+                verbose = verbose,
+                eval_likelihood = eval_likelihood)
 
   estimators <- find_estimator_from_z_and_lambda(
     grid_points = seq(0, max(data$T_obs), length.out = 512),
     z_i = fit$z_i,
     lambda = fit$lambda_n,
-    data_list$Q,
-    data_list$Q_i_mark,
-    data_list$t_AE_star,
-    data_list$t_CE_star
+    data_list_to_cpp$Q,
+    data_list_to_cpp$Q_i_mark,
+    data_list_to_cpp$t_AE_star,
+    data_list_to_cpp$t_CE_star
   )
 
   list(
@@ -380,9 +413,12 @@ fit_npmle <- function(data,
     ),
     settings = list(
       data = data,
-      data_list = data_list,
+      data_list = lists$data_list_to_read,
       max_iter = max_iter,
-      tol = tol
+      tol = tol,
+      alpha_ji = fit$alpha_ji,
+      gamma_ji = fit$gamma_ji,
+      likelihoods = fit$likelihoods
     ),
     converged = fit$converged)
 }

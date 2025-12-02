@@ -491,6 +491,78 @@ void run_em_once(const ModelData& md, Workspace& ws) {
   //Rcpp::Rcout << "[em_fit] eta is " << ws.P123_E << std::endl;
 }
 
+double calculate_likelihood(const ModelData& md, const Workspace& ws) {
+  double loglik = 0.0;
+
+
+  // Recall that gamma and alpha are logical matrices (indicators)
+
+  // A_23{lambda} part
+  for(int u = 0; u < md.N_AE_star; ++u) {
+    loglik += md.r_A[u] * std::log(ws.lambda_u[u]);
+  }
+
+  // AB part
+  for(int i = 0; i < md.N_AB; ++i) {
+    // sum over I_mark
+    loglik += std::log(evaluate(ws, md.R_AB[i], md.t_AB[i]));
+
+    double AB_likelihood = 0.0;
+    // Only iterate up to md.I since gamma_ji is I x N_ABEF
+    for(int j = 0; j < md.I; ++j) {
+      AB_likelihood += md.gamma_ji(j,i) ? ws.z_j[j] * evaluate(ws, md.Q_j(j,1), next_double(md.R_AB[i])) : 0 ;
+    }
+    loglik += std::log(AB_likelihood);
+  }
+
+  // C part
+  for(int k = md.I; k < md.I_mark; ++k) {
+    loglik += md.r_C[k - md.I] * std::log(ws.z_j[k]);
+  }
+
+  // D part
+  for(int i = 0; i < md.N_D; ++i) {
+    double D_likelihood = 0.0;
+    // sum over I_mark multiply alpha z_j
+    for(int j = 0; j < md.I_mark; ++j) {
+      D_likelihood += md.alpha_ji(j,i) ? ws.z_j[j] : 0;
+    }
+    loglik += std::log(D_likelihood);
+  }
+  for(int i = 0; i < md.N_E; ++i) {
+    double E_likelihood = 0.0;
+
+    for(int j = 0; j < md.I; ++j) {
+      E_likelihood += md.gamma_ji(j, md.N_AB + i) ? ws.lambda_u[md.lambda_M_plus_u[i]] * ws.z_j[j] *
+      evaluate(ws, md.Q_j(j,1), md.t_E[i]) : 0;
+    }
+    for(int j = md.I; j < md.I_mark; ++j) {
+      E_likelihood += is_double_eq(md.t_E[i],md.t_CE_star[j - md.I]) ? ws.z_j[j] : 0;
+    }
+
+    loglik += std::log(E_likelihood);
+  }
+  for(int i = 0; i < md.N_F; ++i) {
+    double F_likelihood = 0.0;
+    for(int j = 0; j < md.I_mark; ++j) {
+      F_likelihood += (md.alpha_ji(j, md.N_D + i) ?
+                          ws.z_j[j] : 0);
+
+      // Only access gamma_ji when j < md.I since gamma_ji is I x N_ABEF
+      if (j < md.I) {
+        F_likelihood += (md.gamma_ji(j, md.N_ABE + i) ?
+                         evaluate(ws, md.Q_j(j,1), next_double(md.t_F[i])) * ws.z_j[j] : 0);
+      }
+    }
+    loglik += std::log(F_likelihood);
+  }
+  return loglik;
+}
+
+
+
+
+
 
 // [[Rcpp::export]]
 Rcpp::List em_fit(SEXP md_ptr,
@@ -498,12 +570,14 @@ Rcpp::List em_fit(SEXP md_ptr,
                   Rcpp::Nullable<Rcpp::NumericVector> lambda_init = R_NilValue,
                   int max_iter = 100,
                   double tol = 1e-3,
-                  bool verbose = true) {
+                  bool verbose = true,
+                  bool eval_likelihood = false) {
 
   Rcpp::XPtr<ModelData> p(md_ptr);
   const ModelData& md = *p;
   bool converged = false;
   Workspace ws;
+  std::vector<double> likelihoods;
 
   const arma::uword I_mark = static_cast<arma::uword>(md.I_mark);
   ws.z_j.set_size(I_mark);
@@ -540,8 +614,13 @@ Rcpp::List em_fit(SEXP md_ptr,
   for (int iter = 0; iter < max_iter; ++iter) {
     arma::rowvec prev_lambda_n = ws.lambda_u; // copy
     arma::rowvec prev_z_i      = ws.z_j;      // copy
-
+    
     run_em_once(md, ws);
+
+    if(eval_likelihood) {
+      likelihoods.push_back(calculate_likelihood(md, ws));
+    }
+    
 
     dz = 0.0; dl = 0.0;
     for (arma::uword i = 0; i < I_mark; ++i)
@@ -587,10 +666,7 @@ Rcpp::List em_fit(SEXP md_ptr,
     Rcpp::_["lambda_u"] = ws.lambda_u,
     Rcpp::_["alpha_ji"] = md.alpha_ji,
     Rcpp::_["gamma_ji"]  = md.gamma_ji,
-    Rcpp::_["P123_AB"]        = ws.P123_AB,
-    Rcpp::_["P123_D"]    = ws.P123_D,
-    Rcpp::_["P123_E"]       = ws.P123_E,
-    Rcpp::_["P123_F"]     = ws.P123_F,
-    Rcpp::_["converged"]    = converged
+    Rcpp::_["converged"]    = converged,
+    Rcpp::_["likelihoods"]  = likelihoods
   );
 }
