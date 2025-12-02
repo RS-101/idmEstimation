@@ -31,10 +31,6 @@ struct ModelData {
   // --- Indicator matrices ---
   LogicalMatrix alpha_ij;  // I_mark x (N_D+N_F), my alpha + beta
   LogicalMatrix gamma_im;   // I x N_ABEF, my gamma
-  LogicalMatrix I_rho_mn;  // N_AB x N_AE_star
-  LogicalMatrix I_pi_un;   // N_E x N_AE_star
-  LogicalMatrix I_sigma_cn; // N_F x N_AE_star
-
 
   // ---------- (18) alpha: I' x (N_D+N_F) ----------
   void cal_alpha() {
@@ -60,25 +56,6 @@ struct ModelData {
       for (int m = 0; m < N_ABEF; ++m) {
         double Lm = LR_ABEF(m,0), Rm = LR_ABEF(m,1);
         gamma_im(i,m) = (Lm <= Li && Ri <= Rm);
-      }
-    }
-  }
-
-  // ----- Calc Indicator matrices ------
-  void cal_indicator_matrices() {
-    I_rho_mn = Rcpp::LogicalMatrix(N_AB, N_AE_star);  // N_AB x N_AE_star
-    I_pi_un = Rcpp::LogicalMatrix(N_E, N_AE_star);   // N_E x N_AE_star
-    I_sigma_cn = Rcpp::LogicalMatrix(N_F, N_AE_star); // N_F x N_AE_star
-
-    for(int n = 0; n < N_AE_star; ++n) {
-      for(int m = 0; m < N_AB; ++m) {
-        I_rho_mn(m,n) = t_AB[m] >= t_AE_star[n];
-      }
-      for(int u = 0; u < N_E; ++u) {
-        I_pi_un(u,n) = t_E[u] >= t_AE_star[n];
-      }
-      for(int c = 0; c < N_F; ++c) {
-        I_sigma_cn(c,n) = t_F[c] >= t_AE_star[n];
       }
     }
   }
@@ -197,7 +174,6 @@ struct ModelData {
     cal_gamma();
 
     calc_lambda_M_plus_u();
-    cal_indicator_matrices();
     L = std::min(N_AB, std::min(N_E, std::min(N_F, N_D)));
 
     // checks
@@ -389,59 +365,37 @@ void run_em_once(const ModelData& md, Workspace& ws) {
   setup_prod(md,ws);
 
   // --- Loops over I ----------------------------------------------------------
-  for(int i = 0; i < md.I; ++i) {
-    for (int l = 0; l < md.L; ++l) {
-      ws.P123_AB(l,i) = md.gamma_im(i,l) ?
-      ws.z_j[i]*evaluate(ws, md.Q_j(i,1), next_double(md.R_AB[l])) : 0;
-
-      ws.P123_D(l,i) = md.alpha_ij(i,l) ? ws.z_j[i] : 0;
-
-      ws.P123_E(l,i) = md.gamma_im(i, md.N_AB + l) ? ws.lambda_u[md.lambda_M_plus_u[l]] *
-        evaluate(ws, md.Q_j(i,1), md.t_E[l]) * ws.z_j[i] : 0 ;
-
-      ws.P123_F(l,i) = (md.alpha_ij(i, md.N_D + l) ?
-                            ws.z_j[i] : 0) +
-                            (md.gamma_im(i, md.N_ABE + l) ?
-                            evaluate(ws, md.Q_j(i,1), next_double(md.t_F[l])) *
-                            ws.z_j[i]: 0);
+  for(int j_index = 0; j_index < md.I; ++j_index) {
+    for (int i = 0; i < md.N_AB; ++i) {
+      ws.P123_AB(i,j_index) = md.gamma_im(j_index,i) ?
+      ws.z_j[j_index] * evaluate(ws, md.Q_j(j_index,1), next_double(md.R_AB[i])) : 0;
     }
-
-    // tails
-    for (int l = md.L; l < md.N_AB; ++l) {
-      ws.P123_AB(l,i) = md.gamma_im(i,l) ?
-      ws.z_j[i] * evaluate(ws, md.Q_j(i,1), next_double(md.R_AB[l])) : 0;
+    for (int i = 0; i < md.N_D; ++i) {
+      ws.P123_D(i,j_index) = md.alpha_ij(j_index,i) ?ws.z_j[j_index] : 0;
     }
-    for (int l = md.L; l < md.N_D; ++l) {
-      ws.P123_D(l,i) = md.alpha_ij(i,l) ?ws.z_j[i] : 0;
+    for (int i = 0; i < md.N_E; ++i) {
+      ws.P123_E(i,j_index) = md.gamma_im(j_index, md.N_AB + i) ? ws.lambda_u[md.lambda_M_plus_u[i]] *
+        evaluate(ws, md.Q_j(j_index,1), md.t_E[i]) * ws.z_j[j_index] : 0 ;
     }
-    for (int l = md.L; l < md.N_E; ++l) {
-      ws.P123_E(l,i) = md.gamma_im(i, md.N_AB + l) ? ws.lambda_u[md.lambda_M_plus_u[l]] *
-        evaluate(ws, md.Q_j(i,1), md.t_E[l]) * ws.z_j[i] : 0 ;
-    }
-    for (int l = md.L; l < md.N_F; ++l) {
-      ws.P123_F(l,i) = (md.alpha_ij(i, md.N_D + l) ?
-                            ws.z_j[i] : 0) +
-                            (md.gamma_im(i, md.N_ABE + l) ?
-                            evaluate(ws, md.Q_j(i,1), next_double(md.t_F[l])) *
-                            ws.z_j[i]: 0);
+    for (int i = 0; i < md.N_F; ++i) {
+      ws.P123_F(i,j_index) = (md.alpha_ij(j_index, md.N_D + i) ?
+                            ws.z_j[j_index] : 0) +
+                            (md.gamma_im(j_index, md.N_ABE + i) ?
+                            evaluate(ws, md.Q_j(j_index,1), next_double(md.t_F[i])) *
+                            ws.z_j[j_index]: 0);
     }
   }
 
   // --- Extra for I_mark ------------------------------------------------------
-  for(int i = md.I; i < md.I_mark; ++i) {
-    for (int l = 0; l < md.L; ++l) {
-      ws.P123_D(l,i) = md.alpha_ij(i,l) ?ws.z_j[i] : 0;
-      ws.P123_E(l,i) = is_double_eq(md.t_E[l], md.t_CE_star[i-md.I]) ? ws.z_j[i] : 0;
-      ws.P123_F(l,i) = md.alpha_ij(i, md.N_D + l) ?ws.z_j[i] : 0;
+  for(int j_index = md.I; j_index < md.I_mark; ++j_index) {
+    for (int i = 0; i < md.N_D; ++i) {
+      ws.P123_D(i,j_index) = md.alpha_ij(j_index,i) ?ws.z_j[j_index] : 0;
     }
-    for (int l = md.L; l < md.N_D; ++l) {
-      ws.P123_D(l,i) = md.alpha_ij(i,l) ?ws.z_j[i] : 0;
+    for (int i = 0; i < md.N_E; ++i) {
+      ws.P123_E(i,j_index) = is_double_eq(md.t_E[i],md.t_CE_star[j_index-md.I]) ? ws.z_j[j_index] : 0;
     }
-    for (int l = md.L; l < md.N_E; ++l) {
-      ws.P123_E(l,i) = is_double_eq(md.t_E[l],md.t_CE_star[i-md.I]) ? ws.z_j[i] : 0;
-    }
-    for (int l = md.L; l < md.N_F; ++l) {
-      ws.P123_F(l,i) = md.alpha_ij(i, md.N_D + l) ?ws.z_j[i] : 0;
+    for (int i = 0; i < md.N_F; ++i) {
+      ws.P123_F(i,j_index) = md.alpha_ij(j_index, md.N_D + i) ?ws.z_j[j_index] : 0;
     }
   }
 
@@ -465,66 +419,36 @@ void run_em_once(const ModelData& md, Workspace& ws) {
     sum_sigma_n = 0;
     d_n_part = 0;
 
-
     d_n_part = n <= md.N_A_star ? md.r_A[n] : 0;
-    for (int l = 0; l < md.L; ++l) {
+    for (int i = 0; i < md.N_AB; ++i) {
       // rho_mn
-      if(md.I_rho_mn(l,n)) {
-        for(int i = 0; i < md.I; ++i) {
+      if(md.t_AB[i] >= md.t_AE_star[n]) {
+        for(int j_index = 0; j_index < md.I; ++j_index) {
           sum_rho_n +=
-            md.L_AB[l] <= md.Q_j(i,0) && md.Q_j(i,1) < md.t_AE_star[n] ?
-            ws.P123_AB(l,i) : 0;
+            md.L_AB[i] <= md.Q_j(j_index,0) && md.Q_j(j_index,1) < md.t_AE_star[n] ?
+            ws.P123_AB(i,j_index) : 0;
         }
       }
+    }
+    for (int i = 0; i < md.N_E; ++i) {
       // pi_un
-      if(md.I_pi_un(l,n)) {
-        for(int i = 0; i < md.I; ++i) {
+      if(md.t_E[i] >= md.t_AE_star[n]) {
+        for(int j_index = 0; j_index < md.I; ++j_index) {
           sum_pi_n +=
-            md.L_E[l] <= md.Q_j(i,0) && md.Q_j(i,1) < md.t_AE_star[n] ?
-            ws.P123_E(l,i) : 0;
+            md.L_E[i] <= md.Q_j(j_index,0) && md.Q_j(j_index,1) < md.t_AE_star[n] ?
+            ws.P123_E(i,j_index) : 0;
 
-          sum_pi_full_n += md.t_E[l] == md.t_AE_star[n] ? ws.P123_E(l,i) : 0;
+          sum_pi_full_n += is_double_eq(md.t_E[i], md.t_AE_star[n]) ? ws.P123_E(i,j_index) : 0;
         }
       }
+    }
+    for (int i = 0; i < md.N_F; ++i) {
       // sigma_cn
-      if(md.I_sigma_cn(l,n)) {
-        for(int i = 0; i < md.I; ++i) {
+      if(md.t_F[i] >= md.t_AE_star[n]) {
+        for(int j_index = 0; j_index < md.I; ++j_index) {
           sum_sigma_n +=
-            md.L_F[l] <= md.Q_j(i,0) && md.Q_j(i,1) < md.t_AE_star[n] ?
-            ws.P123_F(l,i) : 0;
-        }
-      }
-
-    }
-    for (int l = md.L; l < md.N_AB; ++l) {
-      // rho_mn
-      if(md.I_rho_mn(l,n)) {
-        for(int i = 0; i < md.I; ++i) {
-          sum_rho_n +=
-            md.L_AB[l] <= md.Q_j(i,0) && md.Q_j(i,1) < md.t_AE_star[n] ?
-            ws.P123_AB(l,i) : 0;
-        }
-      }
-    }
-    for (int l = md.L; l < md.N_E; ++l) {
-      // pi_un
-      if(md.I_pi_un(l,n)) {
-        for(int i = 0; i < md.I; ++i) {
-          sum_pi_n +=
-            md.L_E[l] <= md.Q_j(i,0) && md.Q_j(i,1) < md.t_AE_star[n] ?
-            ws.P123_E(l,i) : 0;
-
-          sum_pi_full_n += is_double_eq(md.t_E[l], md.t_AE_star[n]) ? ws.P123_E(l,i) : 0;
-        }
-      }
-    }
-    for (int l = md.L; l < md.N_F; ++l) {
-      // sigma_cn
-      if(md.I_sigma_cn(l,n)) {
-        for(int i = 0; i < md.I; ++i) {
-          sum_sigma_n +=
-            md.L_F[l] <= md.Q_j(i,0) && md.Q_j(i,1) < md.t_AE_star[n] ?
-            ws.P123_F(l,i) : 0;
+            md.L_F[i] <= md.Q_j(j_index,0) && md.Q_j(j_index,1) < md.t_AE_star[n] ?
+            ws.P123_F(i,j_index) : 0;
         }
       }
     }
