@@ -120,6 +120,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   N_A <- sum(idx_N_tilde)
   t_A <- data$T_obs[idx_N_tilde]
 
+  N_B <- N_AB - N_A
   stopifnot(N_A <= N_AB)
 
   # N_C observations with direct transition 1 → 3, no missing transitions T_obs = V_healthy:
@@ -172,11 +173,11 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   ##### N_AB: LR_AB := [L_AB, R_AB] ####
   LR_AB <- as.interval(matrix(c(L_AB, R_AB), ncol = 2, byrow = F))
 
-  ##### W: N_AB < m <= W := N_AB + N_E, R_{N_AB+u} = t_{N_AB+u} ####
+  ##### N_ABE: N_AB < m <= N_ABE := N_AB + N_E, R_{N_AB+u} = t_{N_AB+u} ####
   LR_E <- as.interval(matrix(c(L_E, t_E), ncol = 2, byrow = F))
-  W = N_AB + N_E
+  N_ABE = N_AB + N_E
 
-  ##### N_ABEF: W := N_AB + N_E < m <= N_ABEF, R_{W+c} = t_{W+c} ####
+  ##### N_ABEF: N_ABE := N_AB + N_E < m <= N_ABEF, R_{N_ABE+c} = t_{N_ABE+c} ####
   LR_F <- as.interval(matrix(c(L_F, t_F), ncol = 2, byrow = F))
 
   ##### LR_ABEF: LR_AB ∪ LR_E ∪ LR_F ####
@@ -189,7 +190,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   # s_max = max(t_D, 1 <= j <= N_D)
   s_max <- ifelse(length(t_D) > 0 ,max(t_D),0)
 
-  # R_max = max(R_AB, 1 <= m <= W)
+  # R_max = max(R_AB, 1 <= m <= N_ABE)
   R_max <- max(LR_AB[, 2], LR_E[, 2])
 
   # e*_max = max(e*_k, 1 <= k <= N_CE_star)
@@ -207,7 +208,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     na.omit(ifelse(s_max > max(R_max, e_star_max), s_max, NA))
   )
 
-  # R_bar = {R_m, 1 <= m <= W} ∪ {∞}
+  # R_bar = {R_m, 1 <= m <= N_ABE} ∪ {∞}
   R_bar <- c(LR_AB[, 2], t_E, Inf)
 
   Q_j <- make_Q(L_bar, R_bar)
@@ -229,8 +230,8 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   I_mark <- I + N_CE_star
   data_list <- list(
     # ints
-    N_D = N_D, N_F = N_F, N_C = N_C, N_E = N_E, N_A = N_A,
-    N_A_star = N_A_star, N_AB = N_AB, W = W, N_AE_star = N_AE_star,
+    N_D = N_D, N_F = N_F, N_C = N_C, N_E = N_E, N_A = N_A, N_B = N_B,
+    N_A_star = N_A_star, N_AB = N_AB, N_ABE = N_ABE, N_AE_star = N_AE_star,
     N_ABEF = N_ABEF, I = I,
     N_CE_star = N_CE_star, I_mark = I_mark,
     N = N_ABEFCD,     # only if you also use it in C++
