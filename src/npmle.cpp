@@ -355,56 +355,9 @@ void print_summary(const ModelData& md, const Workspace& ws) {
 
 }
 
-void run_em_once(const ModelData& md, Workspace& ws) {
-  // --- Resets temps ----------------------------------------------------------
-  ws.P123_AB.zeros(md.N_AB, md.I);
-  ws.P123_D.zeros(md.N_D, md.I_mark);
-  ws.P123_E.zeros(md.N_E, md.I_mark);
-  ws.P123_F.zeros(md.N_F, md.I_mark);
 
-  setup_prod(md,ws);
 
-  // --- Loops over I ----------------------------------------------------------
-  for(int j = 0; j < md.I; ++j) {
-    for (int i = 0; i < md.N_AB; ++i) {
-      ws.P123_AB(i,j) = md.gamma_ji(j,i) ?
-      ws.z_j[j] * evaluate(ws, md.Q_j(j,1), next_double(md.R_AB[i])) : 0;
-    }
-    for (int i = 0; i < md.N_D; ++i) {
-      ws.P123_D(i,j) = md.alpha_ji(j,i) ?ws.z_j[j] : 0;
-    }
-    for (int i = 0; i < md.N_E; ++i) {
-      ws.P123_E(i,j) = md.gamma_ji(j, md.N_AB + i) ? ws.lambda_u[md.lambda_M_plus_u[i]] *
-        evaluate(ws, md.Q_j(j,1), md.t_E[i]) * ws.z_j[j] : 0 ;
-    }
-    for (int i = 0; i < md.N_F; ++i) {
-      ws.P123_F(i,j) = (md.alpha_ji(j, md.N_D + i) ?
-                            ws.z_j[j] : 0) +
-                            (md.gamma_ji(j, md.N_ABE + i) ?
-                            evaluate(ws, md.Q_j(j,1), next_double(md.t_F[i])) *
-                            ws.z_j[j]: 0);
-    }
-  }
-
-  // --- Extra for I_mark ------------------------------------------------------
-  for(int j = md.I; j < md.I_mark; ++j) {
-    for (int i = 0; i < md.N_D; ++i) {
-      ws.P123_D(i,j) = md.alpha_ji(j,i) ?ws.z_j[j] : 0;
-    }
-    for (int i = 0; i < md.N_E; ++i) {
-      ws.P123_E(i,j) = is_double_eq(md.t_E[i],md.t_CE_star[j-md.I]) ? ws.z_j[j] : 0;
-    }
-    for (int i = 0; i < md.N_F; ++i) {
-      ws.P123_F(i,j) = md.alpha_ji(j, md.N_D + i) ?ws.z_j[j] : 0;
-    }
-  }
-
-  // --- Normalizes rows -------------------------------------------------------
-  ws.P123_AB = arma::normalise(ws.P123_AB, 1, 1);
-  ws.P123_D = arma::normalise(ws.P123_D, 1, 1);
-  ws.P123_E = arma::normalise(ws.P123_E, 1, 1);
-  ws.P123_F = arma::normalise(ws.P123_F, 1, 1);
-
+void calculate_lambda_frydman(const ModelData& md, Workspace& ws) {
   double sum_rho_n;
   double sum_pi_n;
   double sum_pi_full_n;
@@ -469,6 +422,63 @@ void run_em_once(const ModelData& md, Workspace& ws) {
     }
 
   }
+}
+
+
+
+
+void run_em_once(const ModelData& md, Workspace& ws) {
+  // --- Resets temps ----------------------------------------------------------
+  ws.P123_AB.zeros(md.N_AB, md.I);
+  ws.P123_D.zeros(md.N_D, md.I_mark);
+  ws.P123_E.zeros(md.N_E, md.I_mark);
+  ws.P123_F.zeros(md.N_F, md.I_mark);
+
+  setup_prod(md,ws);
+
+  // --- Loops over I ----------------------------------------------------------
+  for(int j = 0; j < md.I; ++j) {
+    for (int i = 0; i < md.N_AB; ++i) {
+      ws.P123_AB(i,j) = md.gamma_ji(j,i) ?
+      ws.z_j[j] * evaluate(ws, md.Q_j(j,1), next_double(md.R_AB[i])) : 0;
+    }
+    for (int i = 0; i < md.N_D; ++i) {
+      ws.P123_D(i,j) = md.alpha_ji(j,i) ?ws.z_j[j] : 0;
+    }
+    for (int i = 0; i < md.N_E; ++i) {
+      ws.P123_E(i,j) = md.gamma_ji(j, md.N_AB + i) ? ws.lambda_u[md.lambda_M_plus_u[i]] *
+        evaluate(ws, md.Q_j(j,1), md.t_E[i]) * ws.z_j[j] : 0 ;
+    }
+    for (int i = 0; i < md.N_F; ++i) {
+      ws.P123_F(i,j) = (md.alpha_ji(j, md.N_D + i) ?
+                            ws.z_j[j] : 0) +
+                            (md.gamma_ji(j, md.N_ABE + i) ?
+                            evaluate(ws, md.Q_j(j,1), next_double(md.t_F[i])) *
+                            ws.z_j[j]: 0);
+    }
+  }
+
+  // --- Extra for I_mark ------------------------------------------------------
+  for(int j = md.I; j < md.I_mark; ++j) {
+    for (int i = 0; i < md.N_D; ++i) {
+      ws.P123_D(i,j) = md.alpha_ji(j,i) ?ws.z_j[j] : 0;
+    }
+    for (int i = 0; i < md.N_E; ++i) {
+      ws.P123_E(i,j) = is_double_eq(md.t_E[i],md.t_CE_star[j-md.I]) ? ws.z_j[j] : 0;
+    }
+    for (int i = 0; i < md.N_F; ++i) {
+      ws.P123_F(i,j) = md.alpha_ji(j, md.N_D + i) ?ws.z_j[j] : 0;
+    }
+  }
+
+  // --- Normalizes rows -------------------------------------------------------
+  ws.P123_AB = arma::normalise(ws.P123_AB, 1, 1);
+  ws.P123_D = arma::normalise(ws.P123_D, 1, 1);
+  ws.P123_E = arma::normalise(ws.P123_E, 1, 1);
+  ws.P123_F = arma::normalise(ws.P123_F, 1, 1);
+
+
+  calculate_lambda_frydman(md, ws);
 
   // --- Calculates new z ------------------------------------------------------
   arma::rowvec base = arma::sum(ws.P123_D, 0);
@@ -490,6 +500,9 @@ void run_em_once(const ModelData& md, Workspace& ws) {
 
   //Rcpp::Rcout << "[em_fit] eta is " << ws.P123_E << std::endl;
 }
+
+
+
 
 double calculate_likelihood(const ModelData& md, const Workspace& ws) {
   double loglik = 0.0;
