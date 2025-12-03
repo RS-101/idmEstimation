@@ -415,19 +415,131 @@ void calculate_lambda_frydman(const ModelData& md, Workspace& ws) {
 
     // if lambda_u[n] is larger than 1, we set it to 0.05
     if(ws.lambda_u[n] > 1.0){
-
-     // Rcpp::Rcout << "[em_fit] Warning: lambda_u[" << n << "] > 1.0" << std::endl;
-     // Rcpp::Rcout << "[em_fit] Corresponding to t_AE_star[" << n << "] = " << md.t_AE_star[n] << std::endl;
-      ws.lambda_u[n] = 0.05;
+      ws.lambda_u[n] = 0.9999;
     }
-
   }
 }
 
+void calculate_lambda_em(const ModelData& md, Workspace& ws) {
+  double sum_P2_AB_u;
+  double sum_P23_A_u;
+  double sum_P2_B_extra_u; // for the t_AE^*>t_Bi part
+  double sum_P23_B_u;
+  double sum_P2_D_u;
+  double sum_P23_D_u;
+  double sum_P23_E_u;
+  double sum_P2_E_u;
+  double sum_P23_F_u;
+  double sum_P2_F_u;
 
 
+  // --- Loops over N_AE_star ----------------------------------------------------------
+  for(int u = 0; u < md.N_AE_star; ++u) {
+    sum_P2_AB_u = 0;
+    sum_P23_A_u = 0;
+    sum_P2_B_extra_u = 0;
+    sum_P23_B_u = 0;
+    sum_P2_D_u = 0;
+    sum_P23_D_u = 0;
+    sum_P2_F_u = 0;
+    sum_P23_F_u = 0;
+    sum_P2_E_u = 0;
+    sum_P23_E_u = 0;
 
-void run_em_once(const ModelData& md, Workspace& ws) {
+    // P23_A
+    sum_P23_A_u = u < md.N_A_star ? md.r_A[u] : 0;
+
+    for (int i = 0; i < md.N_AB; ++i) {
+      // P2_A
+      if(md.t_AE_star[u] <= md.t_AB[i]) {
+        for(int j = 0; j < md.I; ++j) {
+          sum_P2_AB_u +=
+            md.L_AB[i] <= md.Q_j(j,0) && md.Q_j(j,1) < md.t_AE_star[u] ?
+            ws.P123_AB(i,j) : 0;
+        }
+      }
+      // if N_A + N_B = N_AB, we sum over the N_B part as well
+      if (i >= md.N_A) {
+        // P2_B
+        // P2_AB
+        if(md.t_AE_star[u] > md.t_AB[i]) {
+          double eval_B_part = evaluate(ws, md.t_AB[i], md.t_AE_star[u]);
+          sum_P2_B_extra_u += eval_B_part;
+          sum_P23_B_u += ws.lambda_u[u] * eval_B_part;
+        }
+      }
+    }
+    for (int i = 0; i < md.N_D; ++i) {
+      // P2_D
+      if(md.t_D[i] < md.t_AE_star[u]) {
+        double eval_D_part = 0;
+        for(int j = 0; j < md.I; ++j) {
+          eval_D_part += md.t_D[i] <= md.Q_j(j,0) && md.Q_j(j,1) < md.t_AE_star[u] ?
+                              ws.z_j[j] * evaluate(ws, md.Q_j(j,1), md.t_AE_star[u]) : 0;
+        }
+        sum_P2_D_u += eval_D_part;
+        sum_P23_D_u += ws.lambda_u[u] * eval_D_part;
+      }
+    }
+
+    for (int i = 0; i < md.N_E; ++i) {
+      // P2_E
+      if(md.t_AE_star[u] <= md.t_E[i]) {
+        for(int j = 0; j < md.I; ++j) {
+          sum_P2_E_u +=
+            md.L_E[i] <= md.Q_j(j,0) && md.Q_j(j,1) < md.t_AE_star[u] ?
+            ws.P123_E(i,j) : 0;
+
+          sum_P23_E_u += is_double_eq(md.t_E[i], md.t_AE_star[u]) ? ws.P123_E(i,j) : 0;
+        }
+      }
+    }
+    for (int i = 0; i < md.N_F; ++i) {
+      // This will hold P_{iu}^{2,F}
+      double P2_F_i = 0.0;
+
+      if (md.t_AE_star[u] <= md.t_F[i]) {
+        // Case: T_AE* <= S_Fi  (transition 1->2 happens before censoring at S_Fi)
+        for (int j = 0; j < md.I; ++j) {
+          if (md.L_F[i] <= md.Q_j(j,0) && md.Q_j(j,1) < md.t_AE_star[u]) {
+            // Q_k ⊂ (L_Fi, T_AE*)
+            P2_F_i += ws.P123_F(i,j);   // P^{1->2,F}_{ij}
+          }
+        }
+      } else {
+        // Case: S_Fi < T_AE*  (transition 1->2 happens after censoring at S_Fi)
+        for (int j = 0; j < md.I; ++j) {
+          if (md.t_F[i] < md.Q_j(j,0) && md.Q_j(j,1) < md.t_AE_star[u]) {
+            // Q_k ⊂ (S_Fi, T_AE*)
+            P2_F_i += ws.z_j[j] * evaluate(ws, md.Q_j(j,1), md.t_AE_star[u]);
+            // z_k * sprod(p_k, T_AE*)
+          }
+        }
+      }
+
+      // Add to denominator and numerator:
+      // sum_i P_{iu}^{2,F}  and  sum_i λ_u P_{iu}^{2,F}
+      sum_P2_F_u  += P2_F_i;
+      sum_P23_F_u += ws.lambda_u[u] * P2_F_i;
+    }
+
+
+    // Rcpp::Rcout << "[em_fit] sum sum_P23_E_u " << sum_P23_E_u << std::endl;
+
+    double demon = sum_P2_AB_u + sum_P2_B_extra_u + sum_P2_D_u + sum_P2_E_u + sum_P2_F_u;
+    //Rcpp::Rcout << "[em_fit] demon is " << demon << std::endl;
+
+    ws.lambda_u[u] = (sum_P23_A_u + sum_P23_B_u + sum_P23_D_u + sum_P23_E_u + sum_P23_F_u)/demon;
+
+
+    // if lambda_u[n] is larger than 1, we set it to 0.05
+    if(ws.lambda_u[u] > 1.0){
+      ws.lambda_u[u] = 0.99;
+    }
+  }
+}
+
+void run_em_once(const ModelData& md, Workspace& ws, bool use_frydman) {
   // --- Resets temps ----------------------------------------------------------
   ws.P123_AB.zeros(md.N_AB, md.I);
   ws.P123_D.zeros(md.N_D, md.I_mark);
@@ -478,7 +590,11 @@ void run_em_once(const ModelData& md, Workspace& ws) {
   ws.P123_F = arma::normalise(ws.P123_F, 1, 1);
 
 
-  calculate_lambda_frydman(md, ws);
+  if(use_frydman){
+    calculate_lambda_frydman(md, ws);
+  } else {
+    calculate_lambda_em(md, ws);
+  }
 
   // --- Calculates new z ------------------------------------------------------
   arma::rowvec base = arma::sum(ws.P123_D, 0);
@@ -584,13 +700,24 @@ Rcpp::List em_fit(SEXP md_ptr,
                   int max_iter = 100,
                   double tol = 1e-3,
                   bool verbose = true,
-                  bool eval_likelihood = false) {
+                  bool eval_likelihood = false,
+                  bool use_frydman = false) {
 
   Rcpp::XPtr<ModelData> p(md_ptr);
   const ModelData& md = *p;
   bool converged = false;
   Workspace ws;
   std::vector<double> likelihoods;
+
+
+  // We add a matrix to safe z and lambda values for each iteration if eval_likelihood is true
+  arma::mat z_history;
+  arma::mat lambda_history;
+  if (eval_likelihood) {
+    z_history.set_size(md.I_mark, max_iter);
+    lambda_history.set_size(static_cast<arma::uword>(md.t_AE_star.size()), max_iter);
+  }
+
 
   const arma::uword I_mark = static_cast<arma::uword>(md.I_mark);
   ws.z_j.set_size(I_mark);
@@ -627,13 +754,17 @@ Rcpp::List em_fit(SEXP md_ptr,
   for (int iter = 0; iter < max_iter; ++iter) {
     arma::rowvec prev_lambda_n = ws.lambda_u; // copy
     arma::rowvec prev_z_i      = ws.z_j;      // copy
-    
-    run_em_once(md, ws);
+
+    run_em_once(md, ws, use_frydman);
 
     if(eval_likelihood) {
       likelihoods.push_back(calculate_likelihood(md, ws));
+
+      // store z and lambda values
+      z_history.col(iter) = ws.z_j.t();
+      lambda_history.col(iter) = ws.lambda_u.t();
     }
-    
+
 
     dz = 0.0; dl = 0.0;
     for (arma::uword i = 0; i < I_mark; ++i)
@@ -672,7 +803,11 @@ Rcpp::List em_fit(SEXP md_ptr,
 
   // if (verbose) print_summary(md, ws);
 
-
+  if (eval_likelihood) {
+    // Resize history matrices to actual number of iterations
+    z_history = z_history.cols(0, likelihoods.size() - 1);
+    lambda_history = lambda_history.cols(0, likelihoods.size() - 1);
+  }
 
   return Rcpp::List::create(
     Rcpp::_["z_j"]      = ws.z_j,
@@ -680,6 +815,8 @@ Rcpp::List em_fit(SEXP md_ptr,
     Rcpp::_["alpha_ji"] = md.alpha_ji,
     Rcpp::_["gamma_ji"]  = md.gamma_ji,
     Rcpp::_["converged"]    = converged,
-    Rcpp::_["likelihoods"]  = likelihoods
+    Rcpp::_["likelihoods"]  = likelihoods,
+    Rcpp::_["z_history"]    = z_history,
+    Rcpp::_["lambda_history"] = lambda_history
   );
 }

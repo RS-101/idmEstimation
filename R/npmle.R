@@ -371,7 +371,8 @@ fit_npmle <- function(data,
                       max_iter = 200,
                       tol = 1e-4,
                       verbose = FALSE,
-                      eval_likelihood = FALSE) {
+                      eval_likelihood = FALSE,
+                      use_frydman = FALSE) {
 
 
   lists <- data_to_list_format(data)
@@ -392,7 +393,8 @@ fit_npmle <- function(data,
                 max_iter = max_iter,
                 tol = tol,
                 verbose = verbose,
-                eval_likelihood = eval_likelihood)
+                eval_likelihood = eval_likelihood,
+                use_frydman)
 
   estimators <- find_estimator_from_z_and_lambda(
     grid_points = seq(0, max(data$T_obs), length.out = 512),
@@ -418,7 +420,9 @@ fit_npmle <- function(data,
       tol = tol,
       alpha_ji = fit$alpha_ji,
       gamma_ji = fit$gamma_ji,
-      likelihoods = fit$likelihoods
+      likelihoods = fit$likelihoods,
+      z_history = fit$z_history,
+      lambda_history = fit$lambda_history
     ),
     converged = fit$converged)
 }
