@@ -1,4 +1,4 @@
-fit_turnbull <- function(obs, s = NULL) {
+fit_turnbull <- function(obs, use_EM = T, s = NULL) {
   make_Q <- function() {
     LL <- sort(unique(union(obs$L, obs$R_tilde)))
     LL <- LL[is.finite(LL)]
@@ -18,7 +18,7 @@ fit_turnbull <- function(obs, s = NULL) {
   c_ij <- outer(obs$L,Q[,1], "<=") & outer(obs$R, Q[,2], ">=")
   d_ij <- outer(obs$L_tilde,Q[,1], "<=") & outer(obs$R_tilde, Q[,2], ">=")
 
-  print(d_ij)
+  # print(d_ij)
 
 
   ll <- function(s) sum(log(colSums(s*t(c_ij)))) -  sum(log(colSums(s*t(d_ij))))
@@ -36,18 +36,27 @@ fit_turnbull <- function(obs, s = NULL) {
   if(is.null(s)) s <- runif(m)
   s <- s/sum(s)
   not_conv <- TRUE
+
+  print(M(s))
   while(not_conv){
     if(M(s) > 0) {
-      s_new <- s*(1+d_ll(s,1:m)/M(s))
+      if (use_EM) {
+        s_new <- s*(d_ll(s,1:m)+M(s))/(sum(s*(d_ll(s,1:m)+M(s))))
+      } else{
+        s_new <- s*(1+d_ll(s,1:m)/M(s))
+      }
     } else {
       s_new = rep(0,m)
     }
 
     not_conv = sum(abs(s_new-s)) > 1e-05
     s = s_new
+    print(s)
   }
 
-  if(d_ll(s,1:m) <= 0) stop("KKT NOT STATISFIED")
+  print(d_ll(s,1:m))
+  if( any(!(s > 0 & abs(d_ll(s,1:m)) < 1e-4) | (s = 0 & d_ll(s,1:m) < 1e-4)) )
+    warning("KKT NOT STATISFIED")
 
   list(s = s, Q = Q)
 }
