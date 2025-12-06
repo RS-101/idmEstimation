@@ -5,8 +5,8 @@ make_model_data <- function(x) {
     .Call(`_idmEstimation_make_model_data`, x)
 }
 
-em_fit <- function(md_ptr, z_init = NULL, lambda_init = NULL, max_iter = 100L, tol = 1e-3, verbose = TRUE) {
-    .Call(`_idmEstimation_em_fit`, md_ptr, z_init, lambda_init, max_iter, tol, verbose)
+em_fit <- function(md_ptr, z_init = NULL, lambda_init = NULL, max_iter = 100L, tol = 1e-3, verbose = TRUE, eval_likelihood = FALSE, use_frydman = FALSE) {
+    .Call(`_idmEstimation_em_fit`, md_ptr, z_init, lambda_init, max_iter, tol, verbose, eval_likelihood, use_frydman)
 }
 
 create_penlik_model_data <- function(data) {

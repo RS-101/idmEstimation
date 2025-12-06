@@ -23,8 +23,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // em_fit
-Rcpp::List em_fit(SEXP md_ptr, Rcpp::Nullable<Rcpp::NumericVector> z_init, Rcpp::Nullable<Rcpp::NumericVector> lambda_init, int max_iter, double tol, bool verbose);
-RcppExport SEXP _idmEstimation_em_fit(SEXP md_ptrSEXP, SEXP z_initSEXP, SEXP lambda_initSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP verboseSEXP) {
+Rcpp::List em_fit(SEXP md_ptr, Rcpp::Nullable<Rcpp::NumericVector> z_init, Rcpp::Nullable<Rcpp::NumericVector> lambda_init, int max_iter, double tol, bool verbose, bool eval_likelihood, bool use_frydman);
+RcppExport SEXP _idmEstimation_em_fit(SEXP md_ptrSEXP, SEXP z_initSEXP, SEXP lambda_initSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP verboseSEXP, SEXP eval_likelihoodSEXP, SEXP use_frydmanSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -34,7 +34,9 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
     Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    rcpp_result_gen = Rcpp::wrap(em_fit(md_ptr, z_init, lambda_init, max_iter, tol, verbose));
+    Rcpp::traits::input_parameter< bool >::type eval_likelihood(eval_likelihoodSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_frydman(use_frydmanSEXP);
+    rcpp_result_gen = Rcpp::wrap(em_fit(md_ptr, z_init, lambda_init, max_iter, tol, verbose, eval_likelihood, use_frydman));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -125,7 +127,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_idmEstimation_make_model_data", (DL_FUNC) &_idmEstimation_make_model_data, 1},
-    {"_idmEstimation_em_fit", (DL_FUNC) &_idmEstimation_em_fit, 6},
+    {"_idmEstimation_em_fit", (DL_FUNC) &_idmEstimation_em_fit, 8},
     {"_idmEstimation_create_penlik_model_data", (DL_FUNC) &_idmEstimation_create_penlik_model_data, 1},
     {"_idmEstimation_calc_log_likelihood", (DL_FUNC) &_idmEstimation_calc_log_likelihood, 4},
     {"_idmEstimation_calc_full_penalty", (DL_FUNC) &_idmEstimation_calc_full_penalty, 7},

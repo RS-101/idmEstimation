@@ -225,8 +225,8 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   Q_full <- list(Q_j, Q_i_mark)
 
 
-  ##### N_AE_star: lambda_n and I': z_i ####
-  # Comment: I believe we have I' z_i's and N_AE_star: lambda_n
+  ##### N_AE_star: lambda_u and I': z_j ####
+  # Comment: I believe we have I' z_j's and N_AE_star: lambda_u
   I_mark <- I + N_CE_star
   data_list <- list(
     # ints
@@ -287,7 +287,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
        data_list_to_read = mod_data_list)
 }
 
-find_estimator_from_z_and_lambda <- function(grid_points, z_i, lambda_n, Q_j, Q_i_mark, t_AE_star, t_CE_star) {
+find_estimator_from_z_and_lambda <- function(grid_points, z_j, lambda_u, Q_j, Q_i_mark, t_AE_star, t_CE_star) {
 
   I <- nrow(Q_j)
   I_mark <- I + length(Q_i_mark)
@@ -303,23 +303,23 @@ find_estimator_from_z_and_lambda <- function(grid_points, z_i, lambda_n, Q_j, Q_
   }
 
   # use intercept for F12 instead of just right or left endpoint
-  F12 <- step_cdf(grid_points, times = Q_j[1:I, 2], masses = z_i[1:I])
-  F13 <- step_cdf(grid_points, times = Q_i_mark, masses = z_i[(I+1):I_mark])
+  F12 <- step_cdf(grid_points, times = Q_j[1:I, 2], masses = z_j[1:I])
+  F13 <- step_cdf(grid_points, times = Q_i_mark, masses = z_j[(I+1):I_mark])
   F_total <- F12 + F13
 
-  A23 <- step_cdf(grid_points, t_AE_star, masses = lambda_n)
+  A23 <- step_cdf(grid_points, t_AE_star, masses = lambda_u)
 
-  F12_at_l_i <- step_cdf(Q_j[,1]-1e-6, times = Q_j[1:I, 2], masses = z_i[1:I])
+  F12_at_l_i <- step_cdf(Q_j[,1]-1e-6, times = Q_j[1:I, 2], masses = z_j[1:I])
   # A12(s): denominators need F(l_i-) for each i
   denom12 <- 1 - F12_at_l_i
-  term12  <- ifelse(denom12 > 0, z_i[1:I] / denom12, 0)
+  term12  <- ifelse(denom12 > 0, z_j[1:I] / denom12, 0)
   A12 <- step_cdf(grid_points, times = Q_j[,2], term12)
 
-  F_total_at_e_k <- step_cdf(t_CE_star-1e-6, times = Q_j[1:I, 2], masses = z_i[1:I]) +
-    step_cdf(t_CE_star-1e-6, times = Q_i_mark, masses = z_i[(I+1):I_mark])
+  F_total_at_e_k <- step_cdf(t_CE_star-1e-6, times = Q_j[1:I, 2], masses = z_j[1:I]) +
+    step_cdf(t_CE_star-1e-6, times = Q_i_mark, masses = z_j[(I+1):I_mark])
   # A12(s): denominators need F(l_i-) for each i
   denom13 <- 1 - F_total_at_e_k
-  term13  <- ifelse(denom13 > 0, z_i[(I+1):I_mark] / denom13, 0)
+  term13  <- ifelse(denom13 > 0, z_j[(I+1):I_mark] / denom13, 0)
   A13 <- step_cdf(grid_points, times = t_CE_star, term13)
 
 
@@ -336,14 +336,14 @@ find_estimator_from_z_and_lambda <- function(grid_points, z_i, lambda_n, Q_j, Q_
 
     t_star_n_order <- order(t_AE_star)
     t_AE_star <- t_AE_star[t_star_n_order]
-    lambda_n <- lambda_n[t_star_n_order]
+    lambda_u <- lambda_u[t_star_n_order]
 
     eligeble <- s < t_AE_star & t_AE_star <= max(t)
 
     t_AE_star <- t_AE_star[eligeble]
-    lambda_n  <- lambda_n[eligeble]
+    lambda_u  <- lambda_u[eligeble]
 
-    cp <- cumprod(1-lambda_n)
+    cp <- cumprod(1-lambda_u)
     idx <- findInterval(t, t_AE_star)
     c(0,cp)[idx+1]
   }
@@ -398,8 +398,8 @@ fit_npmle <- function(data,
 
   estimators <- find_estimator_from_z_and_lambda(
     grid_points = seq(0, max(data$T_obs), length.out = 512),
-    z_i = fit$z_i,
-    lambda = fit$lambda_n,
+    z_j = fit$z_j,
+    lambda = fit$lambda_u,
     data_list_to_cpp$Q,
     data_list_to_cpp$Q_i_mark,
     data_list_to_cpp$t_AE_star,
@@ -410,8 +410,8 @@ fit_npmle <- function(data,
     hazards = estimators$hazards_as_functions,
     distributions_functions = estimators$distributions_as_functions,
     raw_estimators = list(
-      z_i = fit$z_i,
-      lambda = fit$lambda_n
+      z_j = fit$z_j,
+      lambda = fit$lambda_u
     ),
     settings = list(
       data = data,
