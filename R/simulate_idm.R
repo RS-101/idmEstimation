@@ -489,9 +489,12 @@ simulate_idm_constant_hazards <- function(
     a23 = a23_const,
     A12 = function(t) a12 * t,
     A13 = function(t) a13 * t,
-    A23 = function(s) a23 * s
+    A23 = function(s) a23 * s,
+    F12 = function(t) 1 - exp(-a12 * t),
+    F13 = function(t) 1 - exp(-a13 * t),
+    F23 = function(s, t) 1 - exp(-a23 * (t - s))
   )
-  class(result$hazards) <- c("idm_hazards", class(result$hazards))
+  class(result$hazards) <- c("idm_estimatorss", class(result$hazards))
   
   result
 }
@@ -539,26 +542,14 @@ simulate_idm_weibull <- function(
     a12 = a12,
     a13 = a13,
     a23 = a23,
-    A12 = function(t) {
-      sapply(t, function(x) {
-        stats::integrate(a12, lower = 0, upper = x, 
-                        stop.on.error = TRUE, abs.tol = 1e-8)$value
-      })
-    },
-    A13 = function(t) {
-      sapply(t, function(x) {
-        stats::integrate(a13, lower = 0, upper = x,
-                        stop.on.error = TRUE, abs.tol = 1e-8)$value
-      })
-    },
-    A23 = function(s) {
-      sapply(s, function(x) {
-        stats::integrate(a23, lower = 0, upper = x,
-                        stop.on.error = TRUE, abs.tol = 1e-8)$value
-      })
-    }
+    A12 = (t / scale12)^shape12,
+    A13 = (t / scale13)^shape13,
+    A23 = (t / scale23)^shape23,
+    F12 = function(t) 1 - exp(-(t / scale12)^shape12),
+    F13 = function(t) 1 - exp(-(t / scale13)^shape13),
+    F23 = function(s, t) 1 - exp(-(t / scale23)^shape23 - (s / scale23)^shape23)
   )
-  class(result$hazards) <- c("idm_hazards", class(result$hazards))
+  class(result$hazards) <- c("idm_estimators", class(result$hazards))
   
   result
 }
@@ -609,20 +600,18 @@ simulate_idm_joly <- function(n) {
                         stop.on.error = TRUE, abs.tol = 1e-8)$value
       })
     },
-    A13 = function(t) {
+    A13 = (t / scale13)^shape13,
+    A23 = (t / scale23)^shape23,
+    F12 = function(t) {
       sapply(t, function(x) {
-        stats::integrate(a13, lower = 0, upper = x,
-                        stop.on.error = TRUE, abs.tol = 1e-8)$value
+        1 - exp(-stats::integrate(a12, lower = 0, upper = x,
+                                  stop.on.error = TRUE, abs.tol = 1e-8)$value)
       })
     },
-    A23 = function(s) {
-      sapply(s, function(x) {
-        stats::integrate(a23, lower = 0, upper = x,
-                        stop.on.error = TRUE, abs.tol = 1e-8)$value
-      })
-    }
+    F13 = function(t) 1 - exp(-(t / scale13)^shape13),
+    F23 = function(s, t) 1 - exp(-(t / scale23)^shape23 - (s / scale23)^shape23)
   )
-  class(result$hazards) <- c("idm_hazards", class(result$hazards))
+  class(result$hazards) <- c("idm_estimatorss", class(result$hazards))
 
   result
 }
@@ -655,9 +644,12 @@ simulate_idm_frydman <- function(n, scenario = 1L) {
     a23 = a23,
     A12 = function(t) 0.0008 * t,
     A13 = function(t) 0.0002 * t,
-    A23 = function(s) 0.0016 * s
+    A23 = function(s) 0.0016 * s, 
+    F12 = function(t) 1 - exp(-0.0008 * t),
+    F13 = function(t) 1 - exp(-0.0002 * t),
+    F23 = function(s, t) 1 - exp(-0.0016 * (t - s))
   )
-  class(result$hazards) <- c("idm_hazards", class(result$hazards))
+  class(result$hazards) <- c("idm_estimatorss", class(result$hazards))
 
   result
 }

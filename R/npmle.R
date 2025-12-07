@@ -213,17 +213,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
 
   Q_j <- make_Q(L_bar, R_bar)
 
-  Q <- get_interval(Q_j)
-
   I <- nrow(Q_j)
-
-
-  ##### I'= N_CE_star + I: Q_j' = e*_i-I ####
-  Q_i_mark <- t_CE_star
-
-  ##### Q_full = list ####
-  Q_full <- list(Q_j, Q_i_mark)
-
 
   ##### N_AE_star: lambda_u and I': z_j ####
   # Comment: I believe we have I' z_j's and N_AE_star: lambda_u
@@ -248,7 +238,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     t_DF = t_DF,                  # if you really need t_DF
 
     r_C = r_C, r_A = r_A,
-    Q = Q, Q_i_mark = Q_i_mark,
+    t_CE_star = t_CE_star,
 
     # 2-col matrices
     LR_AB = to_mat(LR_AB), LR_E = to_mat(LR_E), LR_F = to_mat(LR_F),
@@ -278,8 +268,8 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     ),
 
     support_point = list(
-      t_CE_star = t_CE_star, t_AE_star = t_AE_star,
-      Q = Q, Q_i_mark = Q_i_mark
+      Q_j = Q_j, t_CE_star = t_CE_star, t_AE_star = t_AE_star,
+      Q = Q
     )
   )
 
@@ -287,10 +277,10 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
        data_list_to_read = mod_data_list)
 }
 
-find_estimator_from_z_and_lambda <- function(grid_points, z_j, lambda_u, Q_j, Q_i_mark, t_AE_star, t_CE_star) {
+find_estimator_from_z_and_lambda <- function(grid_points, z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
 
   I <- nrow(Q_j)
-  I_mark <- I + length(Q_i_mark)
+  I_mark <- I + length(t_CE_star)
 
   # helper: right-continuous step CDF from (times, masses) at s_eval
   step_cdf <- function(grid_points, times, masses, ...) {
@@ -304,7 +294,7 @@ find_estimator_from_z_and_lambda <- function(grid_points, z_j, lambda_u, Q_j, Q_
 
   # use intercept for F12 instead of just right or left endpoint
   F12 <- step_cdf(grid_points, times = Q_j[1:I, 2], masses = z_j[1:I])
-  F13 <- step_cdf(grid_points, times = Q_i_mark, masses = z_j[(I+1):I_mark])
+  F13 <- step_cdf(grid_points, times = t_CE_star, masses = z_j[(I+1):I_mark])
   F_total <- F12 + F13
 
   A23 <- step_cdf(grid_points, t_AE_star, masses = lambda_u)
@@ -316,7 +306,7 @@ find_estimator_from_z_and_lambda <- function(grid_points, z_j, lambda_u, Q_j, Q_
   A12 <- step_cdf(grid_points, times = Q_j[,2], term12)
 
   F_total_at_e_k <- step_cdf(t_CE_star-1e-6, times = Q_j[1:I, 2], masses = z_j[1:I]) +
-    step_cdf(t_CE_star-1e-6, times = Q_i_mark, masses = z_j[(I+1):I_mark])
+    step_cdf(t_CE_star-1e-6, times = t_CE_star, masses = z_j[(I+1):I_mark])
   # A12(s): denominators need F(l_i-) for each i
   denom13 <- 1 - F_total_at_e_k
   term13  <- ifelse(denom13 > 0, z_j[(I+1):I_mark] / denom13, 0)
@@ -350,21 +340,17 @@ find_estimator_from_z_and_lambda <- function(grid_points, z_j, lambda_u, Q_j, Q_
 
 
 
-  hazards_as_functions <- list(
+  estimators <- list(
     A12  = stepify(grid_points, A12, side = "left"),
     A13  = stepify(grid_points, A13, side = "left"),
-    A23  = stepify(grid_points, A23, side = "left")
+    A23  = stepify(grid_points, A23, side = "left"),
+    F12 = stepify(grid_points, F12, side = "left"),
+    F13 = stepify(grid_points, F13, side = "left"),
+    F = stepify(grid_points, F_total, side = "left"),
+    F23 = F23
   )
-  class(hazards_as_functions) <- c("idm_hazards", class(hazards_as_functions))
-
-  list(
-    distributions_as_functions = list(
-      F12 = stepify(grid_points, F12, side = "left"),
-      F13 = stepify(grid_points, F13, side = "left"),
-      F = stepify(grid_points, F_total, side = "left"),
-      F23 = F23),
-    hazards_as_functions = hazards_as_functions
-  )
+  class(estimators) <- c("idm_estimators", class(estimators))
+  estimators
 }
 
 fit_npmle <- function(data,
@@ -401,17 +387,19 @@ fit_npmle <- function(data,
     z_j = fit$z_j,
     lambda = fit$lambda_u,
     data_list_to_cpp$Q,
-    data_list_to_cpp$Q_i_mark,
+    data_list_to_cpp$t_CE_star,
     data_list_to_cpp$t_AE_star,
     data_list_to_cpp$t_CE_star
   )
 
   list(
-    hazards = estimators$hazards_as_functions,
-    distributions_functions = estimators$distributions_as_functions,
+    estimators = estimators,
     raw_estimators = list(
       z_j = fit$z_j,
-      lambda = fit$lambda_u
+      lambda = fit$lambda_u,
+      Q = data_list_to_cpp$Q,
+      t_CE_star = data_list_to_cpp$t_CE_star,
+      t_AE_star = data_list_to_cpp$t_AE_star,
     ),
     settings = list(
       data = data,
