@@ -1,27 +1,55 @@
 library(splines2)
 #### Create spline hazard ####
-make_spline_mat <- function(x, knots, degree = 3) {
-  n_knots <- length(knots)
-  i_spline_mat <- splines2::iSpline(x,
-    degree = degree,
-    knots = knots[-c(1, n_knots)],
-    Boundary.knots = knots[c(1, n_knots)],
-    intercept = TRUE,
-    warn.outside = FALSE
-  )
+make_spline_mat <- function(x, knots, degree, use_bspline) {
 
-  m_spline_mat <- splines2::mSpline(x,
-    degree = degree,
-    knots = knots[-c(1, n_knots)],
-    Boundary.knots = knots[c(1, n_knots)],
-    intercept = TRUE,
-    warn.outside = FALSE
-  )
+  if(!use_bspline){
 
-  spline_mat_list <- list(
-    i_spline = i_spline_mat,
-    m_spline = m_spline_mat
-  )
+    n_knots <- length(knots)
+    i_spline_mat <- splines2::iSpline(x,
+      degree = degree,
+      knots = knots[-c(1, n_knots)],
+      Boundary.knots = knots[c(1, n_knots)],
+      intercept = TRUE,
+      warn.outside = FALSE
+    )
+
+    m_spline_mat <- splines2::mSpline(x,
+      degree = degree,
+      knots = knots[-c(1, n_knots)],
+      Boundary.knots = knots[c(1, n_knots)],
+      intercept = TRUE,
+      warn.outside = FALSE
+    )
+
+    spline_mat_list <- list(
+      i_spline = i_spline_mat,
+      m_spline = m_spline_mat
+    )
+  } else {
+    n_knots <- length(knots)
+    i_spline_mat <- splines2::bSpline(x,
+                                      degree = degree,
+                                      knots = knots[-c(1, n_knots)],
+                                      Boundary.knots = knots[c(1, n_knots)],
+                                      intercept = TRUE,
+                                      warn.outside = FALSE,
+                                      integral = T
+    )
+
+    m_spline_mat <- splines2::bSpline(x,
+                                      degree = degree,
+                                      knots = knots[-c(1, n_knots)],
+                                      Boundary.knots = knots[c(1, n_knots)],
+                                      intercept = TRUE,
+                                      warn.outside = FALSE
+    )
+
+    spline_mat_list <- list(
+      i_spline = i_spline_mat,
+      m_spline = m_spline_mat
+    )
+
+  }
 
   class(spline_mat_list) <- c("spline_mat_list", class(spline_mat_list))
   spline_mat_list
@@ -57,22 +85,22 @@ calculate_penalty_matrix <- function(knots, degree = 3) {
 
 # Case 1: Healthy at T_obs, was healthy at V_healthy
 # Integration from V_healthy to T_obs
-setup_case_1_data <- function(V_0, V_healthy, T_obs, knots_12, knots_13, knots_23, degree = 3) {
+setup_case_1_data <- function(V_0, V_healthy, T_obs, knots_12, knots_13, knots_23, degree, use_bspline) {
   # Create splines at observation points
-  spline_V_0_12 <- make_spline_mat(V_0, knots_12, degree)
-  spline_V_0_13 <- make_spline_mat(V_0, knots_13, degree)
+  spline_V_0_12 <- make_spline_mat(V_0, knots_12, degree, use_bspline)
+  spline_V_0_13 <- make_spline_mat(V_0, knots_13, degree, use_bspline)
 
-  spline_T_obs_12 <- make_spline_mat(T_obs, knots_12, degree)
-  spline_T_obs_13 <- make_spline_mat(T_obs, knots_13, degree)
-  spline_T_obs_23 <- make_spline_mat(T_obs, knots_23, degree)
+  spline_T_obs_12 <- make_spline_mat(T_obs, knots_12, degree, use_bspline)
+  spline_T_obs_13 <- make_spline_mat(T_obs, knots_13, degree, use_bspline)
+  spline_T_obs_23 <- make_spline_mat(T_obs, knots_23, degree, use_bspline)
 
   # Create integration grid from V_healthy to T_obs
   grid_T_obs <- seq(min(V_healthy), max(T_obs), length.out = 250)
   dx_grid_T_obs <- diff(grid_T_obs)[1]
 
-  spline_grid_T_obs_12 <- make_spline_mat(grid_T_obs, knots_12, degree)
-  spline_grid_T_obs_13 <- make_spline_mat(grid_T_obs, knots_13, degree)
-  spline_grid_T_obs_23 <- make_spline_mat(grid_T_obs, knots_23, degree)
+  spline_grid_T_obs_12 <- make_spline_mat(grid_T_obs, knots_12, degree, use_bspline)
+  spline_grid_T_obs_13 <- make_spline_mat(grid_T_obs, knots_13, degree, use_bspline)
+  spline_grid_T_obs_23 <- make_spline_mat(grid_T_obs, knots_23, degree, use_bspline)
 
   list(
     V_0_i_spline_mat_12 = spline_V_0_12$i_spline,
@@ -96,22 +124,22 @@ setup_case_1_data <- function(V_0, V_healthy, T_obs, knots_12, knots_13, knots_2
 
 # Case 2: Died at T_obs, was healthy at V_healthy
 # Integration from V_healthy to T_obs, needs hazard rates at T_obs
-setup_case_2_data <- function(V_0, V_healthy, T_obs, knots_12, knots_13, knots_23, degree = 3) {
+setup_case_2_data <- function(V_0, V_healthy, T_obs, knots_12, knots_13, knots_23, degree, use_bspline) {
   # Create splines at observation points
-  spline_V_0_12 <- make_spline_mat(V_0, knots_12, degree)
-  spline_V_0_13 <- make_spline_mat(V_0, knots_13, degree)
+  spline_V_0_12 <- make_spline_mat(V_0, knots_12, degree, use_bspline)
+  spline_V_0_13 <- make_spline_mat(V_0, knots_13, degree, use_bspline)
 
-  spline_T_obs_12 <- make_spline_mat(T_obs, knots_12, degree)
-  spline_T_obs_13 <- make_spline_mat(T_obs, knots_13, degree)
-  spline_T_obs_23 <- make_spline_mat(T_obs, knots_23, degree)
+  spline_T_obs_12 <- make_spline_mat(T_obs, knots_12, degree, use_bspline)
+  spline_T_obs_13 <- make_spline_mat(T_obs, knots_13, degree, use_bspline)
+  spline_T_obs_23 <- make_spline_mat(T_obs, knots_23, degree, use_bspline)
 
   # Create integration grid from V_healthy to T_obs
   grid_T_obs <- seq(min(V_healthy), max(T_obs), length.out = 250)
   dx_grid_T_obs <- diff(grid_T_obs)[1]
 
-  spline_grid_T_obs_12 <- make_spline_mat(grid_T_obs, knots_12, degree)
-  spline_grid_T_obs_13 <- make_spline_mat(grid_T_obs, knots_13, degree)
-  spline_grid_T_obs_23 <- make_spline_mat(grid_T_obs, knots_23, degree)
+  spline_grid_T_obs_12 <- make_spline_mat(grid_T_obs, knots_12, degree, use_bspline)
+  spline_grid_T_obs_13 <- make_spline_mat(grid_T_obs, knots_13, degree, use_bspline)
+  spline_grid_T_obs_23 <- make_spline_mat(grid_T_obs, knots_23, degree, use_bspline)
 
   list(
     V_0_i_spline_mat_12 = spline_V_0_12$i_spline,
@@ -137,22 +165,22 @@ setup_case_2_data <- function(V_0, V_healthy, T_obs, knots_12, knots_13, knots_2
 
 # Case 3: Ill at T_obs, was healthy at V_healthy, became ill at V_ill
 # Integration from V_healthy to V_ill
-setup_case_3_data <- function(V_0, V_healthy, V_ill, T_obs, knots_12, knots_13, knots_23, degree = 3) {
+setup_case_3_data <- function(V_0, V_healthy, V_ill, T_obs, knots_12, knots_13, knots_23, degree, use_bspline) {
   # Create splines at observation points
-  spline_V_0_12 <- make_spline_mat(V_0, knots_12, degree)
-  spline_V_0_13 <- make_spline_mat(V_0, knots_13, degree)
+  spline_V_0_12 <- make_spline_mat(V_0, knots_12, degree, use_bspline)
+  spline_V_0_13 <- make_spline_mat(V_0, knots_13, degree, use_bspline)
 
-  spline_T_obs_12 <- make_spline_mat(T_obs, knots_12, degree)
-  spline_T_obs_13 <- make_spline_mat(T_obs, knots_13, degree)
-  spline_T_obs_23 <- make_spline_mat(T_obs, knots_23, degree)
+  spline_T_obs_12 <- make_spline_mat(T_obs, knots_12, degree, use_bspline)
+  spline_T_obs_13 <- make_spline_mat(T_obs, knots_13, degree, use_bspline)
+  spline_T_obs_23 <- make_spline_mat(T_obs, knots_23, degree, use_bspline)
 
   # Create integration grid from V_healthy to V_ill
   grid_V_ill <- seq(min(V_healthy), max(V_ill), length.out = 250)
   dx_grid_V_ill <- diff(grid_V_ill)[1]
 
-  spline_grid_V_ill_12 <- make_spline_mat(grid_V_ill, knots_12, degree)
-  spline_grid_V_ill_13 <- make_spline_mat(grid_V_ill, knots_13, degree)
-  spline_grid_V_ill_23 <- make_spline_mat(grid_V_ill, knots_23, degree)
+  spline_grid_V_ill_12 <- make_spline_mat(grid_V_ill, knots_12, degree, use_bspline)
+  spline_grid_V_ill_13 <- make_spline_mat(grid_V_ill, knots_13, degree, use_bspline)
+  spline_grid_V_ill_23 <- make_spline_mat(grid_V_ill, knots_23, degree, use_bspline)
 
   list(
     V_0_i_spline_mat_12 = spline_V_0_12$i_spline,
@@ -177,22 +205,22 @@ setup_case_3_data <- function(V_0, V_healthy, V_ill, T_obs, knots_12, knots_13, 
 
 # Case 4: Died at T_obs, was healthy at V_healthy, became ill at V_ill
 # Integration from V_healthy to V_ill, needs hazard rate at T_obs
-setup_case_4_data <- function(V_0, V_healthy, V_ill, T_obs, knots_12, knots_13, knots_23, degree = 3) {
+setup_case_4_data <- function(V_0, V_healthy, V_ill, T_obs, knots_12, knots_13, knots_23, degree, use_bspline) {
   # Create splines at observation points
-  spline_V_0_12 <- make_spline_mat(V_0, knots_12, degree)
-  spline_V_0_13 <- make_spline_mat(V_0, knots_13, degree)
+  spline_V_0_12 <- make_spline_mat(V_0, knots_12, degree, use_bspline)
+  spline_V_0_13 <- make_spline_mat(V_0, knots_13, degree, use_bspline)
 
-  spline_T_obs_12 <- make_spline_mat(T_obs, knots_12, degree)
-  spline_T_obs_13 <- make_spline_mat(T_obs, knots_13, degree)
-  spline_T_obs_23 <- make_spline_mat(T_obs, knots_23, degree)
+  spline_T_obs_12 <- make_spline_mat(T_obs, knots_12, degree, use_bspline)
+  spline_T_obs_13 <- make_spline_mat(T_obs, knots_13, degree, use_bspline)
+  spline_T_obs_23 <- make_spline_mat(T_obs, knots_23, degree, use_bspline)
 
   # Create integration grid from V_healthy to V_ill
   grid_V_ill <- seq(min(V_healthy), max(V_ill), length.out = 250)
   dx_grid_V_ill <- diff(grid_V_ill)[1]
 
-  spline_grid_V_ill_12 <- make_spline_mat(grid_V_ill, knots_12, degree)
-  spline_grid_V_ill_13 <- make_spline_mat(grid_V_ill, knots_13, degree)
-  spline_grid_V_ill_23 <- make_spline_mat(grid_V_ill, knots_23, degree)
+  spline_grid_V_ill_12 <- make_spline_mat(grid_V_ill, knots_12, degree, use_bspline)
+  spline_grid_V_ill_13 <- make_spline_mat(grid_V_ill, knots_13, degree, use_bspline)
+  spline_grid_V_ill_23 <- make_spline_mat(grid_V_ill, knots_23, degree, use_bspline)
 
   list(
     V_0_i_spline_mat_12 = spline_V_0_12$i_spline,
@@ -224,11 +252,12 @@ setup_cpp_model <- function(V_0,
                             T_obs,
                             status_dead,
                             status_ill,
-                            n_knots = 7,
+                            n_knots,
                             knots_12 = NULL,
                             knots_13 = NULL,
                             knots_23 = NULL,
-                            degree = 3) {
+                            degree,
+                            use_bspline) {
 
   # Set default knots if not provided
   if (is.null(knots_12)) {
@@ -269,7 +298,7 @@ setup_cpp_model <- function(V_0,
       V_0[case_1_idx],
       V_healthy[case_1_idx],
       T_obs[case_1_idx],
-      knots_12, knots_13, knots_23, degree
+      knots_12, knots_13, knots_23, degree, use_bspline
     )
   }
 
@@ -278,7 +307,7 @@ setup_cpp_model <- function(V_0,
       V_0[case_2_idx],
       V_healthy[case_2_idx],
       T_obs[case_2_idx],
-      knots_12, knots_13, knots_23, degree
+      knots_12, knots_13, knots_23, degree, use_bspline
     )
   }
 
@@ -288,7 +317,7 @@ setup_cpp_model <- function(V_0,
       V_healthy[case_3_idx],
       V_ill[case_3_idx],
       T_obs[case_3_idx],
-      knots_12, knots_13, knots_23, degree
+      knots_12, knots_13, knots_23, degree, use_bspline
     )
   }
 
@@ -298,7 +327,7 @@ setup_cpp_model <- function(V_0,
       V_healthy[case_4_idx],
       V_ill[case_4_idx],
       T_obs[case_4_idx],
-      knots_12, knots_13, knots_23, degree
+      knots_12, knots_13, knots_23, degree, use_bspline
     )
   }
 
@@ -314,7 +343,8 @@ setup_cpp_model <- function(V_0,
         degree = degree,
         n_theta_12 = n_theta_12,
         n_theta_13 = n_theta_13,
-        n_theta_23 = n_theta_23)
+        n_theta_23 = n_theta_23,
+        use_bspline = use_bspline)
 }
 
 
@@ -529,27 +559,33 @@ approx_cv <- function(pl_optim) {
 
 create_hazards <- function(model_config, fit) {
   hazards <- list(a12 = function(x) {
-    spline_mat <- make_spline_mat(x, model_config$knots_12, model_config$degree)$m_spline
+    spline_mat <- make_spline_mat(x, model_config$knots_12, model_config$degree,
+                                  model_config$use_bspline)$m_spline
     as.vector(spline_mat %*% fit$theta_hat$theta_12)
   },
   a13 = function(x) {
-    spline_mat <- make_spline_mat(x, model_config$knots_13, model_config$degree)$m_spline
+    spline_mat <- make_spline_mat(x, model_config$knots_13, model_config$degree,
+                                  model_config$use_bspline)$m_spline
     as.vector(spline_mat %*% fit$theta_hat$theta_13)
   },
   a23 = function(x) {
-    spline_mat <- make_spline_mat(x, model_config$knots_23, model_config$degree)$m_spline
+    spline_mat <- make_spline_mat(x, model_config$knots_23, model_config$degree,
+                                  model_config$use_bspline)$m_spline
     as.vector(spline_mat %*% fit$theta_hat$theta_23)
   },
   A12 = function(x) {
-    spline_mat <- make_spline_mat(x, model_config$knots_12, model_config$degree)$i_spline
+    spline_mat <- make_spline_mat(x, model_config$knots_12, model_config$degree,
+                                  model_config$use_bspline)$i_spline
     as.vector(spline_mat %*% fit$theta_hat$theta_12)
   },
   A13 = function(x) {
-    spline_mat <- make_spline_mat(x, model_config$knots_13, model_config$degree)$i_spline
+    spline_mat <- make_spline_mat(x, model_config$knots_13, model_config$degree,
+                                  model_config$use_bspline)$i_spline
     as.vector(spline_mat %*% fit$theta_hat$theta_13)
   },
   A23 = function(x) {
-    spline_mat <- make_spline_mat(x, model_config$knots_23, model_config$degree)$i_spline
+    spline_mat <- make_spline_mat(x, model_config$knots_23, model_config$degree,
+                                  model_config$use_bspline)$i_spline
     as.vector(spline_mat %*% fit$theta_hat$theta_23)
   })
 
@@ -566,6 +602,7 @@ fit_idm <- function(data,
                     degree = 3,
                     n_knots = 7,
                     kappa_values = NULL,
+                    use_bspline = F,
                     verbose = TRUE) {
 
 
@@ -583,7 +620,8 @@ fit_idm <- function(data,
   model_config <- setup_cpp_model(
    V_0 = V_0, V_healthy = V_healthy, V_ill = V_ill, T_obs = T_obs,
     status_dead = status_dead, status_ill = status_ill, n_knots = n_knots,
-    knots_12 = knots_12, knots_13 = knots_13, knots_23 = knots_23, degree = degree
+    knots_12 = knots_12, knots_13 = knots_13, knots_23 = knots_23, degree = degree,
+    use_bspline = use_bspline
   )
 
 
