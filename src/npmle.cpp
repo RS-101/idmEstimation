@@ -14,7 +14,7 @@ struct ModelData {
   L; // min of N_AB, N_E, N_F for loops
 
   // --- scalars (double) ---
-  double s_max, R_max, e_star_max;
+  double s_max, R_max, T_CE_star_max;
 
   // --- vectors ---
   NumericVector t_D, L_F, t_F, t_C, L_E, t_E,
@@ -143,7 +143,7 @@ struct ModelData {
     // scalars
     s_max = as<double>(x["s_max"]);
     R_max = as<double>(x["R_max"]);
-    e_star_max = as<double>(x["e_star_max"]);
+    T_CE_star_max = as<double>(x["T_CE_star_max"]);
 
     // vectors
     t_D = as<NumericVector>(x["t_D"]);

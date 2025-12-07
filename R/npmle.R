@@ -188,28 +188,32 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   ##### I: Q_j = [l_i,r_i] ####
 
   # s_max = max(t_D, 1 <= j <= N_D)
-  s_max <- ifelse(length(t_D) > 0 ,max(t_D),0)
+  C_D_max <- ifelse(length(t_D) > 0 ,max(t_D),0)
 
   # R_max = max(R_AB, 1 <= m <= N_ABE)
   R_max <- max(LR_AB[, 2], LR_E[, 2])
 
   # e*_max = max(e*_k, 1 <= k <= N_CE_star)
   if(length(t_CE_star) > 0) {
-    e_star_max <- max(t_CE_star)
+    T_CE_star_max <- max(t_CE_star)
   } else {
-    e_star_max = 0
+    T_CE_star_max = 0
   }
+
+  L_F_max <- max(L_F)
 
   # L_bar ={L_m, 1 <= m <= M'} ∪ {T* ∩ A} ∪ {S_J ∩ A} ∪ {s_max : s_max > R_max ∨ e*_max}
   L_bar <- c(
-    LR_ABEF[, 1],
+    L_AB, L_E,
     intersect.interval(I_union, t_AE_star),
     intersect.interval(I_union, t_D),
-    na.omit(ifelse(s_max > max(R_max, e_star_max), s_max, NA))
+    na.omit(ifelse(L_F <= max(R_max, T_CE_star_max), L_F, NA )),
+    na.omit(ifelse(C_D_max >= max(R_max, T_CE_star_max, L_F_max), C_D_max, NA)),
+    na.omit(ifelse(L_F_max >= max(R_max, T_CE_star_max, C_D_max), L_F_max, NA))
   )
 
   # R_bar = {R_m, 1 <= m <= N_ABE} ∪ {∞}
-  R_bar <- c(LR_AB[, 2], t_E, Inf)
+  R_bar <- c(R_AB, t_E, Inf)
 
   Q_j <- make_Q(L_bar, R_bar)
 
@@ -227,7 +231,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     N = N_ABEFCD,     # only if you also use it in C++
 
     # scalars
-    s_max = s_max, R_max = R_max, e_star_max = e_star_max,
+    s_max = C_D_max, R_max = R_max, T_CE_star_max = T_CE_star_max,
 
     # vectors
     t_D = t_D, L_F = L_F, t_F = t_F, t_C = t_C,
@@ -255,7 +259,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     ),
 
     maxs = list(
-      s_max = s_max, R_max = R_max, e_star_max = e_star_max
+      s_max = C_D_max, R_max = R_max, T_CE_star_max = T_CE_star_max
     ),
 
     # vectors
@@ -277,56 +281,112 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
        data_list_to_read = mod_data_list)
 }
 
-find_estimator_from_z_and_lambda <- function(grid_points, z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
-
+create_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
   I <- nrow(Q_j)
   I_mark <- I + length(t_CE_star)
 
-  # helper: right-continuous step CDF from (times, masses) at s_eval
-  step_cdf <- function(grid_points, times, masses, ...) {
-    time_order <- order(times)
-    times <- times[time_order]
-    masses <- masses[time_order]
-    cs <- pmax(cumsum(masses),0)
-    idx <- findInterval(grid_points, times, ...)
-    c(0,cs)[idx+1]
+  y_k <- z_j[(I + 1):I_mark]
+  z_j <- z_j[1:I]
+
+  # we make sure that y_k and lambda_u are in the order of t_CE_star and t_AE_star
+  t_CE_star_order <- order(t_CE_star)
+  t_CE_star <- t_CE_star[t_CE_star_order]
+  y_k <- y_k[t_CE_star_order]
+  t_AE_star_order <- order(t_AE_star)
+  t_AE_star <- t_AE_star[t_AE_star_order]
+  lambda_u <- lambda_u[t_AE_star_order]
+
+  q_m <- Q_j[I, 1]
+  p_m_is_inf <- is.infinite(Q_j[I, 2])
+
+  F13 <- function(t) {
+    # We calculuate sum 1(t_CE_star <= t) * y_k
+    # create the matrix of t_CE_star < t
+    eligeble <- outer(t_CE_star, t, FUN = "<=")
+    # multiply each row with y_k
+    weighted <- eligeble * matrix(y_k, nrow = length(t_CE_star), ncol = length(t), byrow = FALSE)
+    # sum over rows
+    retval <- colSums(weighted)
+    if(p_m_is_inf)  retval[t > q_m] <- NA
+
+    retval
   }
 
-  # use intercept for F12 instead of just right or left endpoint
-  F12 <- step_cdf(grid_points, times = Q_j[1:I, 2], masses = z_j[1:I])
-  F13 <- step_cdf(grid_points, times = t_CE_star, masses = z_j[(I+1):I_mark])
-  F_total <- F12 + F13
+  t_AE_star_max <- max(t_AE_star)
 
-  A23 <- step_cdf(grid_points, t_AE_star, masses = lambda_u)
+  A23 <- function(t) {
+    # if t > t_AE_star_max return NA
 
-  F12_at_l_i <- step_cdf(Q_j[,1]-1e-6, times = Q_j[1:I, 2], masses = z_j[1:I])
-  # A12(s): denominators need F(l_i-) for each i
-  denom12 <- 1 - F12_at_l_i
-  term12  <- ifelse(denom12 > 0, z_j[1:I] / denom12, 0)
-  A12 <- step_cdf(grid_points, times = Q_j[,2], term12)
+    # We calculuate sum 1(t_AE_star <= t) * lambda_u
+    # create the matrix of t_AE_star < t
+    eligeble <- outer(t_AE_star, t, FUN = "<=")
+    # multiply each row with lambda_u
+    weighted <- eligeble * matrix(lambda_u, nrow = length(t_AE_star), ncol = length(t), byrow = FALSE)
+    # sum over rows
+    retval <- colSums(weighted)
 
-  F_total_at_e_k <- step_cdf(t_CE_star-1e-6, times = Q_j[1:I, 2], masses = z_j[1:I]) +
-    step_cdf(t_CE_star-1e-6, times = t_CE_star, masses = z_j[(I+1):I_mark])
-  # A12(s): denominators need F(l_i-) for each i
-  denom13 <- 1 - F_total_at_e_k
-  term13  <- ifelse(denom13 > 0, z_j[(I+1):I_mark] / denom13, 0)
-  A13 <- step_cdf(grid_points, times = t_CE_star, term13)
-
-
-  # Turn vectors into step functions over grid_points
-  stepify <- function(x, y, side = c("left", "right"), extend = TRUE) {
-    side <- match.arg(side)
-    f <- if (side == "left") 0 else 1
-    rule <- if (extend) 2 else 1  # 2 = hold ends constant, 1 = NA outside
-    approxfun(x, y, method = "constant", f = f, rule = rule)
+    retval[t > t_AE_star_max] <- NA
+    retval
   }
+
+  F12 <- function(t) {
+    # cumulative sum part: sum z_j for all j with p_j <= t
+    eligeble <- outer(Q_j[, 2], t, FUN = "<=")
+    weighted <- eligeble * matrix(z_j, nrow = I, ncol = length(t), byrow = FALSE)
+    retval   <- colSums(weighted)
+
+    # outside global range
+    retval[t < Q_j[1, 1]] <- 0
+    retval[t > Q_j[I, 2]] <- NA
+
+    # set NA inside each interval [q_j, p_j]
+    for (j in seq_len(I)) {
+      inside <- t >= Q_j[j, 1] & t <= Q_j[j, 2]
+      retval[inside] <- NA
+    }
+
+    retval
+  }
+
+  F12_at_q_j <- F12(Q_j[,1])
+
+  A12 <- function(t) {
+    # cumulative sum part: sum z_j for all j with p_j <= t
+    eligeble <- outer(Q_j[, 2], t, FUN = "<=")
+    weighted <- eligeble * matrix(z_j / (1 - F12_at_q_j), nrow = I, ncol = length(t), byrow = FALSE)
+    retval   <- colSums(weighted)
+
+    # outside global range
+    retval[t < Q_j[1, 1]] <- 0
+    retval[t > Q_j[I, 2]] <- NA
+
+    # set NA inside each interval [q_j, p_j]
+    for (j in seq_len(I)) {
+      inside <- (t >= Q_j[j, 1] & t <= Q_j[j, 2]) | t > Q_j[I, 2]
+      retval[inside] <- NA
+    }
+
+    retval
+
+  }
+
+  F13_at_t_AE_star <- F13(t_CE_star - 1e-8)
+
+  t_CE_star_max <- max(t_CE_star)
+
+  A13 <- function(t) {
+    # We calculuate sum 1(t_CE_star <= t) * lambda_u / (1 - F13(t_CE_star))
+    eligeble <- outer(t_CE_star, t, FUN = "<=")
+    weighted <- eligeble * matrix(lambda_u / (1 - F13_at_t_AE_star), nrow = length(t_CE_star), ncol = length(t), byrow = FALSE)
+    retval <- colSums(weighted)
+
+    retval[t > t_CE_star_max] <- NA
+    retval
+  }
+
 
   F23 <- function(s,t) {
     stopifnot(length(s) == 1)
-
-    t_star_n_order <- order(t_AE_star)
-    t_AE_star <- t_AE_star[t_star_n_order]
-    lambda_u <- lambda_u[t_star_n_order]
 
     eligeble <- s < t_AE_star & t_AE_star <= max(t)
 
@@ -341,12 +401,11 @@ find_estimator_from_z_and_lambda <- function(grid_points, z_j, lambda_u, Q_j, t_
 
 
   estimators <- list(
-    A12  = stepify(grid_points, A12, side = "left"),
-    A13  = stepify(grid_points, A13, side = "left"),
-    A23  = stepify(grid_points, A23, side = "left"),
-    F12 = stepify(grid_points, F12, side = "left"),
-    F13 = stepify(grid_points, F13, side = "left"),
-    F = stepify(grid_points, F_total, side = "left"),
+    F12 = F12,
+    F13 = F13,
+    A12 = A12,
+    A13 = A13,
+    A23 = A23,
     F23 = F23
   )
   class(estimators) <- c("idm_estimators", class(estimators))
@@ -382,22 +441,21 @@ fit_npmle <- function(data,
                 eval_likelihood = eval_likelihood,
                 use_frydman)
 
-  estimators <- find_estimator_from_z_and_lambda(
-    grid_points = seq(0, max(data$T_obs), length.out = 512),
+  estimators <- create_estimators(
     z_j = fit$z_j,
-    lambda = fit$lambda_u,
-    data_list_to_cpp$Q,
-    data_list_to_cpp$t_CE_star,
-    data_list_to_cpp$t_AE_star,
-    data_list_to_cpp$t_CE_star
+    lambda_u = fit$lambda_u,
+    Q_j = data_list_to_cpp$Q,
+    t_CE_star = data_list_to_cpp$t_CE_star,
+    t_AE_star = data_list_to_cpp$t_AE_star,
   )
 
   list(
     estimators = estimators,
     raw_estimators = list(
-      z_j = fit$z_j,
-      lambda = fit$lambda_u,
-      Q = data_list_to_cpp$Q,
+      z_j = fit$z_j[1:data_list_to_cpp$I],
+      z_k = fit$z_j[(data_list_to_cpp$I + 1):data_list_to_cpp$I_mark],
+      lambda_u = fit$lambda_u,
+      Q_j = data_list_to_cpp$Q,
       t_CE_star = data_list_to_cpp$t_CE_star,
       t_AE_star = data_list_to_cpp$t_AE_star,
     ),
