@@ -539,7 +539,7 @@ void calculate_lambda_em(const ModelData& md, Workspace& ws) {
   }
 }
 
-void run_em_once(const ModelData& md, Workspace& ws, bool use_frydman) {
+void run_em_once(const ModelData& md, Workspace& ws, bool use_true_EM) {
   // --- Resets temps ----------------------------------------------------------
   ws.P123_AB.zeros(md.N_AB, md.I);
   ws.P123_D.zeros(md.N_D, md.I_mark);
@@ -590,7 +590,7 @@ void run_em_once(const ModelData& md, Workspace& ws, bool use_frydman) {
   ws.P123_F = arma::normalise(ws.P123_F, 1, 1);
 
 
-  if(use_frydman){
+  if(use_true_EM){
     calculate_lambda_frydman(md, ws);
   } else {
     calculate_lambda_em(md, ws);
@@ -701,7 +701,7 @@ Rcpp::List em_fit(SEXP md_ptr,
                   double tol = 1e-3,
                   bool verbose = true,
                   bool eval_likelihood = false,
-                  bool use_frydman = false) {
+                  bool use_true_EM = false) {
 
   Rcpp::XPtr<ModelData> p(md_ptr);
   const ModelData& md = *p;
@@ -755,7 +755,7 @@ Rcpp::List em_fit(SEXP md_ptr,
     arma::rowvec prev_lambda_n = ws.lambda_u; // copy
     arma::rowvec prev_z_i      = ws.z_j;      // copy
 
-    run_em_once(md, ws, use_frydman);
+    run_em_once(md, ws, use_true_EM);
 
     if(eval_likelihood) {
       likelihoods.push_back(calculate_likelihood(md, ws));

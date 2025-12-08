@@ -281,7 +281,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
        data_list_to_read = mod_data_list)
 }
 
-create_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
+create_npmle_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
   I <- nrow(Q_j)
   I_mark <- I + length(t_CE_star)
 
@@ -385,10 +385,10 @@ create_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
   }
 
 
-  F23 <- function(s,t) {
-    stopifnot(length(s) == 1)
+  F23 <- function(t, entry_time = 1e-4) {
+    stopifnot(length(entry_time) == 1)
 
-    eligeble <- s < t_AE_star & t_AE_star <= max(t)
+    eligeble <- entry_time < t_AE_star & t_AE_star <= max(t)
 
     t_AE_star <- t_AE_star[eligeble]
     lambda_u  <- lambda_u[eligeble]
@@ -401,12 +401,16 @@ create_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
 
 
   estimators <- list(
-    F12 = F12,
-    F13 = F13,
-    A12 = A12,
-    A13 = A13,
-    A23 = A23,
-    F23 = F23
+    distribution_functions = list(
+      F12 = F12,
+      F13 = F13,
+      F23 = F23
+    ),
+    cum_hazard_functions = list(
+      A12 = A12,
+      A13 = A13,
+      A23 = A23
+    )
   )
   class(estimators) <- c("idm_estimators", class(estimators))
   estimators
@@ -417,7 +421,7 @@ fit_npmle <- function(data,
                       tol = 1e-4,
                       verbose = FALSE,
                       eval_likelihood = FALSE,
-                      use_frydman = FALSE) {
+                      use_true_EM = FALSE) {
 
 
   lists <- data_to_list_format(data)
@@ -439,9 +443,9 @@ fit_npmle <- function(data,
                 tol = tol,
                 verbose = verbose,
                 eval_likelihood = eval_likelihood,
-                use_frydman)
+                use_true_EM)
 
-  estimators <- create_estimators(
+  estimators <- create_npmle_estimators(
     z_j = fit$z_j,
     lambda_u = fit$lambda_u,
     Q_j = data_list_to_cpp$Q,
@@ -449,8 +453,18 @@ fit_npmle <- function(data,
     t_AE_star = data_list_to_cpp$t_AE_star,
   )
 
-  list(
+
+
+  idm_fit <- list(
     estimators = estimators,
+    data = data,
+    model_type = "non_parametric_mle",
+    model_config = list(
+      data = data,
+      data_list = lists$data_list_to_read,
+      max_iter = max_iter,
+      tol = tol
+    ),
     raw_estimators = list(
       z_j = fit$z_j[1:data_list_to_cpp$I],
       z_k = fit$z_j[(data_list_to_cpp$I + 1):data_list_to_cpp$I_mark],
@@ -459,18 +473,17 @@ fit_npmle <- function(data,
       t_CE_star = data_list_to_cpp$t_CE_star,
       t_AE_star = data_list_to_cpp$t_AE_star,
     ),
-    settings = list(
-      data = data,
-      data_list = lists$data_list_to_read,
-      max_iter = max_iter,
-      tol = tol,
+    model_specific = list(
       alpha_ji = fit$alpha_ji,
       gamma_ji = fit$gamma_ji,
       likelihoods = fit$likelihoods,
       z_history = fit$z_history,
       lambda_history = fit$lambda_history
     ),
-    converged = fit$converged)
+    converged = fit$converged
+  )
+  class(idm_fit) <- c("idm_fit", class(idm_fit))
+  return(idm_fit)
 }
 
 

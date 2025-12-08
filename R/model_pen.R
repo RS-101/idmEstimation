@@ -69,7 +69,7 @@ max_pen_likelihood <- function(
     lower = 0,
     ...)
 
-  theta_hat <- list(
+  theta_hat_list <- list(
     theta_12 = res$par[1:n_theta_12],
     theta_13 = res$par[(n_theta_12 + 1):(n_theta_12 + n_theta_13)],
     theta_23 = res$par[(n_theta_12 + n_theta_13 + 1):n_theta]
@@ -78,30 +78,28 @@ max_pen_likelihood <- function(
   pl_at_theta_hat <- calc_penalized_log_likelihood(
     cpp_pointer,
     cpp_pointer_penalty,
-    theta_hat$theta_12,
-    theta_hat$theta_13,
-    theta_hat$theta_23,
+    theta_hat_list$theta_12,
+    theta_hat_list$theta_13,
+    theta_hat_list$theta_23,
     kappa_12,
     kappa_13,
     kappa_23
   )
 
   list(
-    theta_hat = theta_hat,
-    model_config = model_config,
+    theta_hat_list = theta_hat_list,
     kappa_12 = kappa_12,
     kappa_13 = kappa_13,
     kappa_23 = kappa_23,
     log_likelihood = max(pl_at_theta_hat$log_likelihood, -1e10),
     penalized_log_likelihood = max(pl_at_theta_hat$penalized_log_likelihood, -1e10),
     penalty = pl_at_theta_hat$penalty,
-    convergence = res$convergence,
     optim_res = res
   )
 }
 
 
-approx_cv <- function(pl_optim) {
+approx_cv <- function(model_config, fit) {
 
   safe_solve <- function(H_pl, H_ll, ridge_start = 0, tol = 1e-8, max_iter = 8) {
     # Ensure symmetry (Hessians should be symmetric, but numerics can drift)
@@ -133,19 +131,19 @@ approx_cv <- function(pl_optim) {
     list(X = X, method = "svd", lambda = lambda * sc, rank = sum(sv$d > thr))
   }
 
-  theta_hat <- pl_optim$theta_hat
-  ll_value <- pl_optim$log_likelihood
-  pl_value <- pl_optim$penalized_log_likelihood
+  theta_hat_list <- theta_hat_list
+  ll_value <- fit$log_likelihood
+  pl_value <- fit$penalized_log_likelihood
 
   if(abs(ll_value) > 1e9 | abs(pl_value) > 1e9){
     return(-1e9)
   }
 
-  model_pointer <- pl_optim$model_config$model_pointer
-  penalty_pointer <- pl_optim$model_config$penalty_pointer
-  n_theta_12 <- pl_optim$model_config$n_theta_12
-  n_theta_13 <- pl_optim$model_config$n_theta_13
-  n_theta_23 <- pl_optim$model_config$n_theta_23
+  model_pointer <- model_config$model_pointer
+  penalty_pointer <- model_config$penalty_pointer
+  n_theta_12 <- model_config$n_theta_12
+  n_theta_13 <- model_config$n_theta_13
+  n_theta_23 <- model_config$n_theta_23
   n_theta <- n_theta_12 + n_theta_13 + n_theta_23
 
 
@@ -164,13 +162,13 @@ approx_cv <- function(pl_optim) {
       theta_12 = long_theta[1:n_theta_12],
       theta_13 = long_theta[(n_theta_12 + 1):(n_theta_12 + n_theta_13)],
       theta_23 = long_theta[(n_theta_12 + n_theta_13 + 1):n_theta],
-      kappa_12 = pl_optim$kappa_12,
-      kappa_13 = pl_optim$kappa_13,
-      kappa_23 = pl_optim$kappa_23)$penalized_log_likelihood
+      kappa_12 = fit$kappa_12,
+      kappa_13 = fit$kappa_13,
+      kappa_23 = fit$kappa_23)$penalized_log_likelihood
   }
 
 
-  long_theta_hat <- unlist(theta_hat)
+  long_theta_hat <- unlist(fit$theta_hat_list)
 
   H_pl <- numDeriv::hessian(pl_in_long_theta, long_theta_hat)
   H_ll  <- numDeriv::hessian(ll_in_long_theta, long_theta_hat)
@@ -181,8 +179,6 @@ approx_cv <- function(pl_optim) {
   approx_cv <- ll_value - tr_val
   approx_cv
 }
-
-
 
 fit_spline_model <- function(data,
                     knots_12 = NULL,
@@ -285,7 +281,7 @@ fit_spline_model <- function(data,
       kappa_23 <- kappa_grid$kappa_23[i]
 
       fit <- max_pen_likelihood(cpp_pointer, cpp_pointer_penalty, model_config, kappa_12, kappa_13, kappa_23,...)
-      approx_cv_value <- approx_cv(fit)
+      approx_cv_value <- approx_cv(model_config, fit)
 
       fits[[i]] <- fit
       cvs[i] <- approx_cv_value
@@ -307,18 +303,28 @@ fit_spline_model <- function(data,
   )
   final_fit <- fits[[best]]
 
-  hazards <- create_estimators(model_config, final_fit)
+  estimators <- create_estimators(model_config, final_fit$theta_hat_list)
 
-  return(list(
-        hazards = hazards,
-        kappas = final_kappas,
-        fit = final_fit,
-        model_config = model_config,
-        penalty_config = penalty_config,
-        full_cv_results = list(
-          cv_values = cvs,
-          fits = fits
-        )
-    ))
+
+    # idm fit object
+  idm_fit <- list(
+    estimators = estimators,
+    data = data,
+    model_type = "piecewise_constant",
+    raw_estimates = final_fit$theta_hat_list,
+    model_config = model_config,
+    converged = final_fit$optim_res$convergence == 0,
+    model_specific = list(
+      final_kappas = final_kappas,
+      optim_res = final_fit$optim_res,
+      penalty_config = penalty_config,
+      full_cv_results = list(
+            cv_values = cvs,
+            fits = fits
+          )
+    )
+  )
+  class(idm_fit) <- c("idm_fit", class(idm_fit))
+
+  return(idm_fit)
 }
-

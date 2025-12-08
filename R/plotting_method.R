@@ -1,4 +1,4 @@
-# create a plotting method for the idm_hazards class using ggplot2
+# create a plotting method for the idm_estimators class using ggplot2
 #' @export
 plot.idm_hazards <- function(x, estimator_name,
                              max_time = c(1,1,3),
@@ -27,7 +27,7 @@ plot.idm_hazards <- function(x, estimator_name,
                                             names_to = "hazard", values_to = "value")
   } else  {
     if(!"a12" %in% names(x) || !"a13" %in% names(x) || !"a23" %in% names(x)) {
-      stop("Hazard functions a12, a13, and a23 must be available in the idm_hazards object to plot non-cumulative hazards.")
+      stop("Hazard functions a12, a13, and a23 must be available in the idm_estimators object to plot non-cumulative hazards.")
     }
     hazard_df <- data.frame(
       time = time_seq,
@@ -74,23 +74,23 @@ plot.idm_hazards <- function(x, estimator_name,
 # We want to be able to add plots together using ggplot2's + operator
 #' @export
 `+.idm_hazards` <- function(e1, e2) {
-  if (inherits(e1, "idm_hazards") && inherits(e2, "ggplot")) {
-    # idm_hazards + ggplot: create plot from idm_hazards then add ggplot layer
+  if (inherits(e1, "idm_estimators") && inherits(e2, "ggplot")) {
+    # idm_estimators + ggplot: create plot from idm_estimators then add ggplot layer
     return(plot(e1, label = deparse(substitute(e1))) + e2)
-  } else if (inherits(e1, "idm_hazards") && inherits(e2, "idm_hazards")) {
-    # idm_hazards + idm_hazards: create base plot and add second
+  } else if (inherits(e1, "idm_estimators") && inherits(e2, "idm_estimators")) {
+    # idm_estimators + idm_estimators: create base plot and add second
     p <- plot(e1, label = deparse(substitute(e1)))
     p <- plot(e2, add = p, label = deparse(substitute(e2)))
     return(p)
   } else {
-    stop("Can only combine idm_hazards objects with ggplot objects or other idm_hazards objects.")
+    stop("Can only combine idm_estimators objects with ggplot objects or other idm_estimators objects.")
   }
 }
 
-# Register a method for ggplot + idm_hazards
+# Register a method for ggplot + idm_estimators
 #' @export
 ggplot_add.idm_hazards <- function(object, plot, object_name) {
-  # When ggplot + idm_hazards, add the idm_hazards data to the plot
+  # When ggplot + idm_estimators, add the idm_estimators data to the plot
   # Extract parameters from the existing plot
   max_time <- attr(plot, "idm_max_time")
   cumulative <- attr(plot, "idm_cumulative")
@@ -99,7 +99,7 @@ ggplot_add.idm_hazards <- function(object, plot, object_name) {
   if (is.null(max_time)) max_time <- 100
   if (is.null(cumulative)) cumulative <- FALSE
 
-  # Add the new idm_hazards to the existing plot with same parameters
+  # Add the new idm_estimators to the existing plot with same parameters
   result <- plot(object, max_time = max_time, cumulative = cumulative,
                  add = plot, label = object_name)
 

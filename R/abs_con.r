@@ -289,65 +289,68 @@ setup_cpp_model <- function(data_object,
 
 
 
-create_estimators <- function(model_config, fit) {
+create_estimators <- function(model_config, theta_hat_list) {
 
   use_bSpline <- ifelse(is.null(model_config$use_bSpline), FALSE, model_config$use_bSpline)
   a12 = function(x) {
     spline_mat <- make_spline_mat(x, model_config$knots_12, model_config$degree,
                                   use_bSpline)$m_spline
-    as.vector(spline_mat %*% fit$theta_hat$theta_12)
+    as.vector(spline_mat %*% theta_hat_list$theta_12)
   }
   a13 = function(x) {
     spline_mat <- make_spline_mat(x, model_config$knots_13, model_config$degree,
                                   use_bSpline)$m_spline
-    as.vector(spline_mat %*% fit$theta_hat$theta_13)
+    as.vector(spline_mat %*% theta_hat_list$theta_13)
   }
   a23 = function(x) {
     spline_mat <- make_spline_mat(x, model_config$knots_23, model_config$degree,
                                   use_bSpline)$m_spline
-    as.vector(spline_mat %*% fit$theta_hat$theta_23)
+    as.vector(spline_mat %*% theta_hat_list$theta_23)
   }
   A12 = function(x) {
     spline_mat <- make_spline_mat(x, model_config$knots_12, model_config$degree,
                                   use_bSpline)$i_spline
-    as.vector(spline_mat %*% fit$theta_hat$theta_12)
+    as.vector(spline_mat %*% theta_hat_list$theta_12)
   }
   A13 = function(x) {
     spline_mat <- make_spline_mat(x, model_config$knots_13, model_config$degree,
                                   use_bSpline)$i_spline
-    as.vector(spline_mat %*% fit$theta_hat$theta_13)
+    as.vector(spline_mat %*% theta_hat_list$theta_13)
   }
   A23 = function(x) {
     spline_mat <- make_spline_mat(x, model_config$knots_23, model_config$degree,
                                   use_bSpline)$i_spline
-    as.vector(spline_mat %*% fit$theta_hat$theta_23)
+    as.vector(spline_mat %*% theta_hat_list$theta_23)
   }
-  F1 = function(x) {
+  F12 = function(x) {
       1 - exp(-A12(x))
   }
-  F2 = function(x) {
+  F13 = function(x) {
       1 - exp(-A13(x))
   }
-  F3 = function(s, t) {
-      exp(-A23(t) - A23(s))
+  F23 = function(t, entry_time = 1e-4) {
+      exp(-A23(t) - A23(entry_time))
   }
 
   estimators <- list(
-    a12 = a12,
-    a13 = a13,
-    a23 = a23,
-    A12 = A12,
-    A13 = A13,
-    A23 = A23,
-    F1 = F1,
-    F2 = F2,
-    F3 = F3
+    hazard_functions = list(
+      a12 = a12,
+      a13 = a13,
+      a23 = a23
+    ),
+    cum_hazard_functions = list(
+      A12 = A12,
+      A13 = A13,
+      A23 = A23
+    ),
+    distribution_functions = list(
+      F12 = F12,
+      F13 = F13,
+      F23 = F23
+    )
   )
-
-
 
   # add class to hazards
   class(estimators) <- c("idm_estimators", class(estimators))
   estimators
 }
-

@@ -28,16 +28,14 @@ max_pc_likelihood <- function(cpp_pointer, model_config, long_theta_0 = NULL) {
     method = "L-BFGS-B",
     lower = 0)
 
-  theta_hat <- list(
+  theta_hat_list <- list(
     theta_12 = res$par[1:n_theta_12],
     theta_13 = res$par[(n_theta_12 + 1):(n_theta_12 + n_theta_13)],
     theta_23 = res$par[(n_theta_12 + n_theta_13 + 1):n_theta]
   )
 
   list(
-    theta_hat = theta_hat,
-    model_config = model_config,
-    convergence = res$convergence,
+    theta_hat_list = theta_hat_list,
     optim_res = res
   )
 }
@@ -90,10 +88,23 @@ fit_pc_model <- function(data,
 
   fit <- max_pc_likelihood(cpp_pointer, model_config)
 
-  hazards <- create_estimators(model_config, fit)
+  estimators <- create_estimators(model_config, fit$theta_hat_list)
 
-  return(list(
-        hazards = hazards,
-        fit = fit,
-        model_config = model_config))
+
+
+  # idm fit object
+  idm_fit <- list(
+    estimators = estimators,
+    data = data,
+    model_type = "piecewise_constant",
+    raw_estimates = fit$theta_hat_list,
+    model_config = model_config,
+    converged = fit$optim_res$convergence == 0,
+    model_specific = list(
+      optim_res = fit$optim_res
+    )
+  )
+  class(idm_fit) <- c("idm_fit", class(idm_fit))
+
+  return(idm_fit)
 }
