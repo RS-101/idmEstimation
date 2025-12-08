@@ -1,3 +1,12 @@
+# case classification:
+  # Case A: illness and death observed
+  # Case B: illness observed and censored while ill
+  # Case C: death observed at state 1 without illness V_healthy == T_obs
+  # Case D: censored at state 1 without illness V_healthy == T_obs
+  # Case E: not observed and death observed either at state 1 or 2
+  # Case F: not observed and censored either at state 1 or 2 
+
+
 simulate_exact_idm <- function(
   n,
   a12, a13, a23, # all are functions of ABSOLUTE calendar time t
@@ -192,11 +201,20 @@ add_censoring <- function(exact_idm,
 
 
 
-  status <- integer(n)
-  status[!has_interval & !died_at_cutoff] <- 1
-  status[!has_interval & died_at_cutoff] <- 2
-  status[has_interval & !died_at_cutoff] <- 3
-  status[has_interval & died_at_cutoff] <- 4
+  status <- character(n)
+  # Case A illness and death observed
+  # Case B illness observed and censored while ill
+  # Case C death observed at state 1 without illness V_healthy == T_obs
+  # Case D censored at state 1 without illness V_healthy == T_obs
+  # Case E not observed and death observed either at state 1 or 2
+  # Case F not observed and censored either at state 1 or 2 
+
+  status[has_interval & died_at_cutoff] <- "A"
+  status[has_interval & !died_at_cutoff] <- "B"
+  status[!has_interval & died_at_cutoff & abs(V_healthy - T_cutoff) < 1e-8] <- "C"
+  status[!has_interval & !died_at_cutoff & abs(V_healthy - T_cutoff) < 1e-8] <- "D"
+  status[!has_interval & died_at_cutoff & (T_cutoff- V_healthy) >= 1e-8] <- "E"
+  status[!has_interval & !died_at_cutoff & (T_cutoff - V_healthy) >= 1e-8] <- "F"
 
   # For status 1 (alive, never observed ill), the illness time is right-censored at the last healthy visit
   T_obs <- T_cutoff
@@ -213,11 +231,15 @@ add_censoring <- function(exact_idm,
     status_ill = as.numeric(has_interval),
     case = factor(
       status,
-      levels = 1:4,
-      labels = c(
-        "healthy@cutoff (cens)", "died@cutoff (no illness observed)",
-        "interval illness, alive@cutoff", "interval illness, died@cutoff"
-      )
+      levels = c("A", "B", "C", "D", "E", "F")
+      # labels = c(
+      #   "illness observed, died@cutoff",
+      #   "illness observed, alive@cutoff",
+      #   "died@cutoff (healty before death)",
+      #   "healthy@cutoff (healty before censoring)",
+      #   "died@cutoff (healty or ill before death)",
+      #   "alive@cutoff (healty or ill before censoring)"
+      # )
     )
   )
 
@@ -323,13 +345,16 @@ add_censoring_frydman <- function(exact_idm, scenario = 1L) {
   }
 
 
-
-  status <- integer(n)
-  status[!status_illness & !status_dead] <- 1
-  status[!status_illness & status_dead] <- 2
-  status[status_illness & !status_dead] <- 3
-  status[status_illness & status_dead] <- 4
-
+  # Standardized status classification
+  has_interval <- !is.na(V_ill)
+  
+  status <- character(n)
+  status[has_interval & status_dead] <- "A"
+  status[has_interval & !status_dead] <- "B"
+  status[!has_interval & status_dead & abs(V_healthy - T_obs) < 1e-8] <- "C"
+  status[!has_interval & !status_dead & abs(V_healthy - T_obs) < 1e-8] <- "D"
+  status[!has_interval & status_dead & (T_obs - V_healthy) >= 1e-8] <- "E"
+  status[!has_interval & !status_dead & (T_obs - V_healthy) >= 1e-8] <- "F"
 
   # Return
   df_obs_idm <- data.frame(
@@ -339,15 +364,8 @@ add_censoring_frydman <- function(exact_idm, scenario = 1L) {
     V_ill = V_ill,
     T_obs = T_obs,
     status_dead = as.numeric(status_dead),
-    status_ill = as.numeric(status_illness),
-    case = factor(
-      status,
-      levels = 1:4,
-      labels = c(
-        "healthy@cutoff (cens)", "died@cutoff (no illness observed)",
-        "interval illness, alive@cutoff", "interval illness, died@cutoff"
-      )
-    )
+    status_ill = as.numeric(has_interval),
+    case = factor(status, levels = c("A", "B", "C", "D", "E", "F"))
   )
 
   list(obs = df_obs_idm, cens_mechanism = NULL)
@@ -398,12 +416,23 @@ add_censoring_joly <- function(exact_idm) {
   }
 
 
-  status <- integer(n)
-  status[!status_illness & !status_dead] <- 1
-  status[!status_illness & status_dead] <- 2
-  status[status_illness & !status_dead] <- 3
-  status[status_illness & status_dead] <- 4
+  # Standardized status classification
+  has_interval <- !is.na(V_ill)
+  
+  status <- character(n)
+  # Case A: illness and death observed
+  # Case B: illness observed and censored while ill
+  # Case C: death observed at state 1 without illness V_healthy == T_obs
+  # Case D: censored at state 1 without illness V_healthy == T_obs
+  # Case E: not observed and death observed either at state 1 or 2
+  # Case F: not observed and censored either at state 1 or 2 
 
+  status[has_interval & status_dead] <- "A"
+  status[has_interval & !status_dead] <- "B"
+  status[!has_interval & status_dead & abs(V_healthy - T_obs) < 1e-8] <- "C"
+  status[!has_interval & !status_dead & abs(V_healthy - T_obs) < 1e-8] <- "D"
+  status[!has_interval & status_dead & (T_obs - V_healthy) >= 1e-8] <- "E"
+  status[!has_interval & !status_dead & (T_obs - V_healthy) >= 1e-8] <- "F"
 
   # Return
   df_obs_idm <- data.frame(
@@ -413,15 +442,8 @@ add_censoring_joly <- function(exact_idm) {
     V_ill = V_ill,
     T_obs = T_obs,
     status_dead = as.numeric(status_dead),
-    status_ill = as.numeric(status_illness),
-    case = factor(
-      status,
-      levels = 1:4,
-      labels = c(
-        "healthy@cutoff (cens)", "died@cutoff (no illness observed)",
-        "interval illness, alive@cutoff", "interval illness, died@cutoff"
-      )
-    )
+    status_ill = as.numeric(has_interval),
+    case = factor(status, levels = c("A", "B", "C", "D", "E", "F"))
   )
 
   list(obs = df_obs_idm, cens_mechanism = NULL)
