@@ -292,44 +292,46 @@ setup_cpp_model <- function(data_object,
 create_estimators <- function(model_config, theta_hat_list) {
 
   use_bSpline <- ifelse(is.null(model_config$use_bSpline), FALSE, model_config$use_bSpline)
-  a12 = function(x) {
+  a12 <- function(x) {
     spline_mat <- make_spline_mat(x, model_config$knots_12, model_config$degree,
                                   use_bSpline)$m_spline
     as.vector(spline_mat %*% theta_hat_list$theta_12)
   }
-  a13 = function(x) {
+  a13 <- function(x) {
     spline_mat <- make_spline_mat(x, model_config$knots_13, model_config$degree,
                                   use_bSpline)$m_spline
     as.vector(spline_mat %*% theta_hat_list$theta_13)
   }
-  a23 = function(x) {
+  a23 <- function(x) {
     spline_mat <- make_spline_mat(x, model_config$knots_23, model_config$degree,
                                   use_bSpline)$m_spline
     as.vector(spline_mat %*% theta_hat_list$theta_23)
   }
-  A12 = function(x) {
+  A12 <- function(x) {
     spline_mat <- make_spline_mat(x, model_config$knots_12, model_config$degree,
                                   use_bSpline)$i_spline
     as.vector(spline_mat %*% theta_hat_list$theta_12)
   }
-  A13 = function(x) {
+  A13 <- function(x) {
     spline_mat <- make_spline_mat(x, model_config$knots_13, model_config$degree,
                                   use_bSpline)$i_spline
     as.vector(spline_mat %*% theta_hat_list$theta_13)
   }
-  A23 = function(x) {
+  A23 <- function(x) {
     spline_mat <- make_spline_mat(x, model_config$knots_23, model_config$degree,
                                   use_bSpline)$i_spline
     as.vector(spline_mat %*% theta_hat_list$theta_23)
   }
-  F12 = function(x) {
+  F12 <- function(x) {
       1 - exp(-A12(x))
   }
-  F13 = function(x) {
+  F13 <- function(x) {
       1 - exp(-A13(x))
   }
-  F23 = function(t, entry_time = 1e-4) {
-      exp(-A23(t) - A23(entry_time))
+  P22 <- function(t, entry_time = 10) {
+      ifelse(t >= entry_time,
+            exp(-A23(t) + A23(entry_time)),
+            NA_real_)
   }
 
   estimators <- list(
@@ -346,7 +348,7 @@ create_estimators <- function(model_config, theta_hat_list) {
     distribution_functions = list(
       F12 = F12,
       F13 = F13,
-      F23 = F23
+      P22 = P22
     )
   )
 

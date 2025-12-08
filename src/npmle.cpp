@@ -591,9 +591,9 @@ void run_em_once(const ModelData& md, Workspace& ws, bool use_true_EM) {
 
 
   if(use_true_EM){
-    calculate_lambda_frydman(md, ws);
-  } else {
     calculate_lambda_em(md, ws);
+  } else {
+    calculate_lambda_frydman(md, ws);
   }
 
   // --- Calculates new z ------------------------------------------------------

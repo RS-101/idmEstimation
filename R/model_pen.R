@@ -131,7 +131,7 @@ approx_cv <- function(model_config, fit) {
     list(X = X, method = "svd", lambda = lambda * sc, rank = sum(sv$d > thr))
   }
 
-  theta_hat_list <- theta_hat_list
+  theta_hat_list <- fit$theta_hat_list
   ll_value <- fit$log_likelihood
   pl_value <- fit$penalized_log_likelihood
 
@@ -265,7 +265,7 @@ fit_spline_model <- function(data,
       kappa_23 <- kappa_grid$kappa_23[i]
 
       fit <- max_pen_likelihood(cpp_pointer, cpp_pointer_penalty, model_config, kappa_12, kappa_13, kappa_23,...)
-      approx_cv_value <- approx_cv(fit)
+      approx_cv_value <- approx_cv(model_config, fit)
 
       list(fit = fit, cv = approx_cv_value)
     }, mc.cores = max(1, parallel::detectCores() - 1))
@@ -310,7 +310,7 @@ fit_spline_model <- function(data,
   idm_fit <- list(
     estimators = estimators,
     data = data,
-    model_type = "piecewise_constant",
+    model_type = "penalized_spline",
     raw_estimates = final_fit$theta_hat_list,
     model_config = model_config,
     converged = final_fit$optim_res$convergence == 0,
@@ -324,7 +324,7 @@ fit_spline_model <- function(data,
           )
     )
   )
-  class(idm_fit) <- c("idm_fit", class(idm_fit))
+  class(idm_fit) <- c("idm_object", class(idm_fit))
 
   return(idm_fit)
 }

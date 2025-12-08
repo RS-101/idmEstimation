@@ -433,22 +433,21 @@ add_censoring_joly <- function(exact_idm) {
 simulate_idm <- function(exact_idm, censoring_fn, ...) {
   # Apply censoring function
   censored_data <- censoring_fn(exact_idm, ...)
-  
+
   # Extract observed and censoring mechanism data
   obs_data <- censored_data$obs
   cens_data <- censored_data$cens_mechanism
-  
+
   # Compute summary statistics
   summary_stats <- summarise_simulated_data(obs_data, exact_idm, cens_data)
-  
+
   # Return structured result
   result <- list(
     obs = obs_data,
-    exact = exact_idm,
     cens_mechanism = cens_data,
     summary = summary_stats
   )
-  
+
   class(result) <- c("simulated_idm", class(result))
   result
 }
@@ -466,7 +465,7 @@ simulate_idm_constant_hazards <- function(
   a12_const <- function(t) rep(a12, length(t))
   a13_const <- function(t) rep(a13, length(t))
   a23_const <- function(s) rep(a23, length(s))
-  
+
   # Simulate exact data
   exact_idm <- simulate_exact_idm(
     n = n,
@@ -474,29 +473,54 @@ simulate_idm_constant_hazards <- function(
     a13 = a13_const,
     a23 = a23_const
   )
-  
+
   # Apply censoring and summarize
   result <- simulate_idm(
     exact_idm = exact_idm,
     censoring_fn = add_censoring,
     average_number_of_visits = average_number_of_visits
   )
-  
-  # Add hazard functions to result
-  result$hazards <- list(
-    a12 = a12_const,
-    a13 = a13_const,
-    a23 = a23_const,
-    A12 = function(t) a12 * t,
-    A13 = function(t) a13 * t,
-    A23 = function(s) a23 * s,
-    F12 = function(t) 1 - exp(-a12 * t),
-    F13 = function(t) 1 - exp(-a13 * t),
-    F23 = function(s, t) 1 - exp(-a23 * (t - s))
+
+  data <- result$obs
+
+  model_config <- list(
+    censoring_mechanism = "constant_hazards",
+    observation_scheme = result$cens_mechanism,
+    censoring_summary = result$summary,
+    a12 = a12,
+    a13 = a13,
+    a23 = a23,
+    average_number_of_visits = average_number_of_visits
   )
-  class(result$hazards) <- c("idm_estimatorss", class(result$hazards))
-  
-  result
+
+  estimators <- list(
+    hazard_functions = list(
+      a12 = a12_const,
+      a13 = a13_const,
+      a23 = a23_const
+    ),
+    cum_hazard_functions = list(
+      A12 = function(t) a12 * t,
+      A13 = function(t) a13 * t,
+      A23 = function(s) a23 * s
+    ),
+    distribution_functions = list(
+      F12 = function(t) 1 - exp(-a12 * t),
+      F13 = function(t) 1 - exp(-a13 * t),
+      P22 = function(t, entry_time = 0) ifelse(t >= entry_time, exp(-a23 * (t - entry_time)), NA_real_)
+    )
+  )
+  class(estimators) <- c("idm_estimators", class(estimators))
+
+  retval <- list(
+    data = data,
+    model_type = paste0("simulation_constant_hazards_n", n),
+    model_config = model_config,
+    estimators = estimators
+  )
+
+  class(retval) <- c("idm_object", class(retval))
+  retval
 }
 
 simulate_idm_weibull <- function(
@@ -521,7 +545,7 @@ simulate_idm_weibull <- function(
   a12 <- function(t) h_weibull(t, shape12, scale12)
   a13 <- function(t) h_weibull(t, shape13, scale13)
   a23 <- function(t) h_weibull(t, shape23, scale23)
-  
+
   # Simulate exact data
   exact_idm <- simulate_exact_idm(
     n = n,
@@ -529,29 +553,54 @@ simulate_idm_weibull <- function(
     a13 = a13,
     a23 = a23
   )
-  
+
   # Apply censoring and summarize
   result <- simulate_idm(
     exact_idm = exact_idm,
     censoring_fn = add_censoring,
     average_number_of_visits = average_number_of_visits
   )
-  
-  # Add hazard functions
-  result$hazards <- list(
-    a12 = a12,
-    a13 = a13,
-    a23 = a23,
-    A12 = (t / scale12)^shape12,
-    A13 = (t / scale13)^shape13,
-    A23 = (t / scale23)^shape23,
-    F12 = function(t) 1 - exp(-(t / scale12)^shape12),
-    F13 = function(t) 1 - exp(-(t / scale13)^shape13),
-    F23 = function(s, t) 1 - exp(-(t / scale23)^shape23 - (s / scale23)^shape23)
+
+  data <- result$obs
+
+  model_config <- list(
+    censoring_mechanism = "weibull",
+    observation_scheme = result$cens_mechanism,
+    censoring_summary = result$summary,
+    shape12 = shape12, scale12 = scale12,
+    shape13 = shape13, scale13 = scale13,
+    shape23 = shape23, scale23 = scale23,
+    average_number_of_visits = average_number_of_visits
   )
-  class(result$hazards) <- c("idm_estimators", class(result$hazards))
-  
-  result
+
+  estimators <- list(
+    hazard_functions = list(
+      a12 = a12,
+      a13 = a13,
+      a23 = a23
+    ),
+    cum_hazard_functions = list(
+      A12 = function(t) (t / scale12)^shape12,
+      A13 = function(t) (t / scale13)^shape13,
+      A23 = function(t) (t / scale23)^shape23
+    ),
+    distribution_functions = list(
+      F12 = function(t) 1 - exp(-(t / scale12)^shape12),
+      F13 = function(t) 1 - exp(-(t / scale13)^shape13),
+      P22 = function(t, entry_time = 0) ifelse(t >= entry_time, exp(-(t / scale23)^shape23 + (entry_time / scale23)^shape23), NA_real_)
+    )
+  )
+  class(estimators) <- c("idm_estimators", class(estimators))
+
+  retval <- list(
+    data = data,
+    model_type = paste0("simulation_weibull_n", n),
+    model_config = model_config,
+    estimators = estimators
+  )
+
+  class(retval) <- c("idm_object", class(retval))
+  retval
 }
 
 
@@ -575,7 +624,7 @@ simulate_idm_joly <- function(n) {
   scale23 <- 1 / 0.08
   shape13 <- 3
   scale13 <- 1 / 0.04
-  
+
   a12 <- h_mix
   a13 <- function(t) h_weibull(t, shape13, scale13)
   a23 <- function(t) h_weibull(t, shape23, scale23)
@@ -589,31 +638,58 @@ simulate_idm_joly <- function(n) {
     censoring_fn = add_censoring_joly
   )
 
-  # Add hazard functions
-  result$hazards <- list(
-    a12 = a12,
-    a13 = a13,
-    a23 = a23,
-    A12 = function(t) {
-      sapply(t, function(x) {
-        stats::integrate(a12, lower = 0, upper = x,
-                        stop.on.error = TRUE, abs.tol = 1e-8)$value
-      })
-    },
-    A13 = (t / scale13)^shape13,
-    A23 = (t / scale23)^shape23,
-    F12 = function(t) {
-      sapply(t, function(x) {
-        1 - exp(-stats::integrate(a12, lower = 0, upper = x,
-                                  stop.on.error = TRUE, abs.tol = 1e-8)$value)
-      })
-    },
-    F13 = function(t) 1 - exp(-(t / scale13)^shape13),
-    F23 = function(s, t) 1 - exp(-(t / scale23)^shape23 - (s / scale23)^shape23)
-  )
-  class(result$hazards) <- c("idm_estimatorss", class(result$hazards))
+  data <- result$obs
 
-  result
+  model_config <- list(
+    censoring_mechanism = "Joly",
+    observation_scheme = result$cens_mechanism,
+    censoring_summary = result$summary,
+    shape13 = shape13,
+    scale13 = scale13,
+    shape23 = shape23,
+    scale23 = scale23
+  )
+
+
+  estimators <- list(
+    hazard_functions = list(
+      a12 = a12,
+      a13 = a13,
+      a23 = a23
+    ),
+    cum_hazard_functions = list(
+      A12 = function(t) {
+        sapply(t, function(x) {
+          stats::integrate(a12, lower = 0, upper = x,
+                          stop.on.error = TRUE, abs.tol = 1e-8)$value
+        })
+      },
+      A13 = function(t) (t / scale13)^shape13,
+      A23 = function(t) (t / scale23)^shape23
+    ),
+    distribution_functions = list(
+      F12 = function(t) {
+        sapply(t, function(x) {
+          1 - exp(-stats::integrate(a12, lower = 0, upper = x,
+                                    stop.on.error = TRUE, abs.tol = 1e-8)$value)
+        })
+      },
+      F13 = function(t) 1 - exp(-(t / scale13)^shape13),
+      P22 = function(t, entry_time = 0) ifelse(t >= entry_time, exp(-(t / scale23)^shape23 + (entry_time / scale23)^shape23), NA_real_)
+    )
+  )
+  class(estimators) <- c("idm_estimators", class(estimators))
+
+  retval <- list(
+    data = data,
+    model_type = paste0("simulation_joly_n", n),
+    model_config = model_config,
+    estimators = estimators
+  )
+
+  class(retval) <- c("idm_object", class(retval))
+
+  retval
 }
 
 simulate_idm_frydman <- function(n, scenario = 1L) {
@@ -637,21 +713,46 @@ simulate_idm_frydman <- function(n, scenario = 1L) {
     scenario = scenario
   )
 
-  # Add hazard functions (constant, so cumulative is linear)
-  result$hazards <- list(
-    a12 = a12,
-    a13 = a13,
-    a23 = a23,
-    A12 = function(t) 0.0008 * t,
-    A13 = function(t) 0.0002 * t,
-    A23 = function(s) 0.0016 * s, 
-    F12 = function(t) 1 - exp(-0.0008 * t),
-    F13 = function(t) 1 - exp(-0.0002 * t),
-    F23 = function(s, t) 1 - exp(-0.0016 * (t - s))
-  )
-  class(result$hazards) <- c("idm_estimatorss", class(result$hazards))
+  data <- result$obs
 
-  result
+  model_config <- list(
+    censoring_mechanism = "Frydman",
+    observation_scheme = result$cens_mechanism,
+    censoring_summary = result$summary,
+    scenario = scenario,
+    a12 = 0.0008,
+    a13 = 0.0002,
+    a23 = 0.0016
+  )
+
+  estimators <- list(
+    hazard_functions = list(
+      a12 = a12,
+      a13 = a13,
+      a23 = a23
+    ),
+    cum_hazard_functions = list(
+      A12 = function(t) 0.0008 * t,
+      A13 = function(t) 0.0002 * t,
+      A23 = function(s) 0.0016 * s
+    ),
+    distribution_functions = list(
+      F12 = function(t) 1 - exp(-0.0008 * t),
+      F13 = function(t) 1 - exp(-0.0002 * t),
+      P22 = function(t, entry_time = 0) ifelse(t >= entry_time, exp(-0.0016 * (t - entry_time)), NA_real_)
+    )
+  )
+  class(estimators) <- c("idm_estimators", class(estimators))
+
+  retval <- list(
+    data = data,
+    model_type = paste0("simulation_frydman_n", n, "_scenario", scenario),
+    model_config = model_config,
+    estimators = estimators
+  )
+
+  class(retval) <- c("idm_object", class(retval))
+  retval
 }
 
 
@@ -664,12 +765,12 @@ summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
   if (length(missing_cols)) {
     stop("Missing columns in observed data: ", paste(missing_cols, collapse = ", "))
   }
-  
+
   n <- nrow(obs_data)
   observed_illness <- as.logical(obs_data$status_ill)
   observed_death <- as.logical(obs_data$status_dead)
   unknown_transition <- !observed_illness & (obs_data$V_healthy < obs_data$T_obs)
-  
+
   # Basic counts
   n_any_death <- sum(observed_death, na.rm = TRUE)
   n_death_via_illness <- sum(observed_death & observed_illness, na.rm = TRUE)
@@ -680,13 +781,13 @@ summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
   n_ill_observed <- sum(observed_illness, na.rm = TRUE)
   n_no_ill_obs <- n - n_ill_observed
   n_missing <- n_censoring_missing_transition + n_death_missing_transition
-  
+
   # Percentages
   p_death <- n_any_death / n
   p_illness_observed <- n_ill_observed / n
   p_missing_transition_given_no_obs <- if (n_no_ill_obs > 0) n_missing / n_no_ill_obs else NA_real_
   p_missing_transition_overall <- n_missing / n
-  
+
   # From exact data: percentage with illness through state 2
   illness_happened_before_T_obs <- is.finite(exact_data$T_ill) & (exact_data$T_ill <= obs_data$T_obs)
   n_true_illness_before_cutoff <- sum(illness_happened_before_T_obs, na.rm = TRUE)
@@ -694,7 +795,7 @@ summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
   p_illness_unobserved <- if (n_true_illness_before_cutoff > 0) {
     n_unobserved_illness / n_true_illness_before_cutoff
   } else NA_real_
-  
+
   # Visit timing statistics (only for those with observed illness)
   if (n_ill_observed > 0) {
     ill_idx <- which(observed_illness)
@@ -705,7 +806,7 @@ summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
     mean_interval_between_visits <- NA_real_
     sd_interval_between_visits <- NA_real_
   }
-  
+
   # Time between last visit and cutoff for non-observed illness
   if (n_no_ill_obs > 0) {
     no_ill_idx <- which(!observed_illness)
@@ -716,17 +817,17 @@ summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
     mean_time_last_visit_to_cutoff <- NA_real_
     sd_time_last_visit_to_cutoff <- NA_real_
   }
-  
+
   # True path classification
   true_path <- rep(NA_character_, n)
   if (!is.null(exact_data$path)) {
     true_path <- as.character(exact_data$path)
   }
-  
+
   # Build result
   summary_result <- list(
     n = n,
-    
+
     # Death statistics
     death = list(
       n_any_death = n_any_death,
@@ -735,7 +836,7 @@ summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
       n_death_missing_transition = n_death_missing_transition,
       p_death = p_death
     ),
-    
+
     # Illness statistics
     illness = list(
       n_ill_observed = n_ill_observed,
@@ -745,20 +846,20 @@ summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
       p_illness_observed = p_illness_observed,
       p_illness_unobserved = p_illness_unobserved
     ),
-    
+
     # Censoring statistics
     censoring = list(
       n_censoring_exact = n_censoring_exact,
       n_censoring_missing_transition = n_censoring_missing_transition
     ),
-    
+
     # Missing transition statistics
     missing_transition = list(
       n_missing = n_missing,
       p_missing_given_no_obs = p_missing_transition_given_no_obs,
       p_missing_overall = p_missing_transition_overall
     ),
-    
+
     # Visit timing
     visit_timing = list(
       mean_interval_between_visits = mean_interval_between_visits,
@@ -766,12 +867,12 @@ summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
       mean_time_last_visit_to_cutoff = mean_time_last_visit_to_cutoff,
       sd_time_last_visit_to_cutoff = sd_time_last_visit_to_cutoff
     ),
-    
+
     # Cross-tabulation
     tables = list(
       observed_status = table(
-        Illness = observed_illness, 
-        Death = observed_death, 
+        Illness = observed_illness,
+        Death = observed_death,
         useNA = "ifany"
       ),
       true_vs_observed = if (!all(is.na(true_path))) {
@@ -783,7 +884,7 @@ summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
       } else NULL
     )
   )
-  
+
   class(summary_result) <- c("idm_summary", class(summary_result))
   summary_result
 }
@@ -791,32 +892,32 @@ summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
 print.idm_summary <- function(x, ...) {
   cat("=== IDM Simulation Summary ===\n")
   cat(sprintf("Sample size: %d\n\n", x$n))
-  
+
   cat("--- Death Statistics ---\n")
-  cat(sprintf("  Total deaths: %d (%.1f%%)\n", 
+  cat(sprintf("  Total deaths: %d (%.1f%%)\n",
               x$death$n_any_death, 100 * x$death$p_death))
   cat(sprintf("  Deaths via illness: %d\n", x$death$n_death_via_illness))
   cat(sprintf("  Direct deaths (exact): %d\n", x$death$n_death_exact))
-  cat(sprintf("  Deaths with missing transition: %d\n\n", 
+  cat(sprintf("  Deaths with missing transition: %d\n\n",
               x$death$n_death_missing_transition))
-  
+
   cat("--- Illness Statistics ---\n")
-  cat(sprintf("  Illness observed: %d (%.1f%%)\n", 
+  cat(sprintf("  Illness observed: %d (%.1f%%)\n",
               x$illness$n_ill_observed, 100 * x$illness$p_illness_observed))
-  cat(sprintf("  True illness before cutoff: %d\n", 
+  cat(sprintf("  True illness before cutoff: %d\n",
               x$illness$n_true_illness_before_cutoff))
-  cat(sprintf("  Unobserved illness: %d (%.1f%% of true illness)\n\n", 
-              x$illness$n_unobserved_illness, 
-              100 * ifelse(is.na(x$illness$p_illness_unobserved), 0, 
+  cat(sprintf("  Unobserved illness: %d (%.1f%% of true illness)\n\n",
+              x$illness$n_unobserved_illness,
+              100 * ifelse(is.na(x$illness$p_illness_unobserved), 0,
                            x$illness$p_illness_unobserved)))
-  
+
   cat("--- Missing Transitions ---\n")
   cat(sprintf("  Total missing transitions: %d\n", x$missing_transition$n_missing))
-  cat(sprintf("  Among no observed illness: %.1f%%\n", 
+  cat(sprintf("  Among no observed illness: %.1f%%\n",
               100 * x$missing_transition$p_missing_given_no_obs))
-  cat(sprintf("  Overall: %.1f%%\n\n", 
+  cat(sprintf("  Overall: %.1f%%\n\n",
               100 * x$missing_transition$p_missing_overall))
-  
+
   cat("--- Visit Timing ---\n")
   if (!is.na(x$visit_timing$mean_interval_between_visits)) {
     cat(sprintf("  Mean interval between visits (observed illness): %.2f (SD: %.2f)\n",
@@ -828,15 +929,15 @@ print.idm_summary <- function(x, ...) {
                 x$visit_timing$mean_time_last_visit_to_cutoff,
                 x$visit_timing$sd_time_last_visit_to_cutoff))
   }
-  
+
   cat("\n--- Observed Status Table ---\n")
   print(x$tables$observed_status)
-  
+
   if (!is.null(x$tables$true_vs_observed)) {
     cat("\n--- True Path vs Observed Illness ---\n")
     print(x$tables$true_vs_observed)
   }
-  
+
   invisible(x)
 }
 

@@ -104,7 +104,7 @@ fit_pc_model <- function(data,
       optim_res = fit$optim_res
     )
   )
-  class(idm_fit) <- c("idm_fit", class(idm_fit))
+  class(idm_fit) <- c("idm_object", class(idm_fit))
 
   return(idm_fit)
 }

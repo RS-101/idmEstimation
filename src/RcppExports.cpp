@@ -94,8 +94,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // em_fit
-Rcpp::List em_fit(SEXP md_ptr, Rcpp::Nullable<Rcpp::NumericVector> z_init, Rcpp::Nullable<Rcpp::NumericVector> lambda_init, int max_iter, double tol, bool verbose, bool eval_likelihood, bool use_frydman);
-RcppExport SEXP _idmEstimation_em_fit(SEXP md_ptrSEXP, SEXP z_initSEXP, SEXP lambda_initSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP verboseSEXP, SEXP eval_likelihoodSEXP, SEXP use_frydmanSEXP) {
+Rcpp::List em_fit(SEXP md_ptr, Rcpp::Nullable<Rcpp::NumericVector> z_init, Rcpp::Nullable<Rcpp::NumericVector> lambda_init, int max_iter, double tol, bool verbose, bool eval_likelihood, bool use_true_EM);
+RcppExport SEXP _idmEstimation_em_fit(SEXP md_ptrSEXP, SEXP z_initSEXP, SEXP lambda_initSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP verboseSEXP, SEXP eval_likelihoodSEXP, SEXP use_true_EMSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -106,8 +106,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
     Rcpp::traits::input_parameter< bool >::type eval_likelihood(eval_likelihoodSEXP);
-    Rcpp::traits::input_parameter< bool >::type use_frydman(use_frydmanSEXP);
-    rcpp_result_gen = Rcpp::wrap(em_fit(md_ptr, z_init, lambda_init, max_iter, tol, verbose, eval_likelihood, use_frydman));
+    Rcpp::traits::input_parameter< bool >::type use_true_EM(use_true_EMSEXP);
+    rcpp_result_gen = Rcpp::wrap(em_fit(md_ptr, z_init, lambda_init, max_iter, tol, verbose, eval_likelihood, use_true_EM));
     return rcpp_result_gen;
 END_RCPP
 }

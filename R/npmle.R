@@ -272,8 +272,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     ),
 
     support_point = list(
-      Q_j = Q_j, t_CE_star = t_CE_star, t_AE_star = t_AE_star,
-      Q = Q
+      Q_j = Q_j, t_CE_star = t_CE_star, t_AE_star = t_AE_star
     )
   )
 
@@ -300,7 +299,7 @@ create_npmle_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
   p_m_is_inf <- is.infinite(Q_j[I, 2])
 
   F13 <- function(t) {
-    # We calculuate sum 1(t_CE_star <= t) * y_k
+    # We calculate sum 1(t_CE_star <= t) * y_k
     # create the matrix of t_CE_star < t
     eligeble <- outer(t_CE_star, t, FUN = "<=")
     # multiply each row with y_k
@@ -341,7 +340,7 @@ create_npmle_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
 
     # set NA inside each interval [q_j, p_j]
     for (j in seq_len(I)) {
-      inside <- t >= Q_j[j, 1] & t <= Q_j[j, 2]
+      inside <- t > Q_j[j, 1] & t <= Q_j[j, 2]
       retval[inside] <- NA
     }
 
@@ -360,24 +359,17 @@ create_npmle_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
     retval[t < Q_j[1, 1]] <- 0
     retval[t > Q_j[I, 2]] <- NA
 
-    # set NA inside each interval [q_j, p_j]
-    for (j in seq_len(I)) {
-      inside <- (t >= Q_j[j, 1] & t <= Q_j[j, 2]) | t > Q_j[I, 2]
-      retval[inside] <- NA
-    }
-
     retval
-
   }
 
-  F13_at_t_AE_star <- F13(t_CE_star - 1e-8)
+  F13_at_t_CE_star <- F13(t_CE_star - 1e-8)
 
   t_CE_star_max <- max(t_CE_star)
 
   A13 <- function(t) {
     # We calculuate sum 1(t_CE_star <= t) * lambda_u / (1 - F13(t_CE_star))
     eligeble <- outer(t_CE_star, t, FUN = "<=")
-    weighted <- eligeble * matrix(lambda_u / (1 - F13_at_t_AE_star), nrow = length(t_CE_star), ncol = length(t), byrow = FALSE)
+    weighted <- eligeble * matrix(y_k / (1 - F13_at_t_CE_star), nrow = length(t_CE_star), ncol = length(t), byrow = FALSE)
     retval <- colSums(weighted)
 
     retval[t > t_CE_star_max] <- NA
@@ -385,17 +377,35 @@ create_npmle_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
   }
 
 
-  F23 <- function(t, entry_time = 1e-4) {
+  P22 <- function(t, entry_time = 1e-4) {
     stopifnot(length(entry_time) == 1)
 
     eligeble <- entry_time < t_AE_star & t_AE_star <= max(t)
 
-    t_AE_star <- t_AE_star[eligeble]
-    lambda_u  <- lambda_u[eligeble]
+    t_AE_star_filtered <- t_AE_star[eligeble]
+    lambda_u_filtered  <- lambda_u[eligeble]
 
-    cp <- cumprod(1-lambda_u)
-    idx <- findInterval(t, t_AE_star)
-    c(0,cp)[idx+1]
+    # Handle edge case: no eligible time points
+    if (length(t_AE_star_filtered) == 0) {
+      return(rep(NA, length(t)))
+    }
+
+    # Compute survival function: S(t) = prod(1 - lambda_u) for all u <= t
+    survival <- cumprod(1 - lambda_u_filtered)
+
+    # P22(t) = S(t) = survival probability in state 2
+    idx <- findInterval(t, t_AE_star_filtered, rightmost.closed = TRUE)
+
+    retval <- numeric(length(t))
+    # Before first event after entry: P22 = 1 (still in state 2)
+    retval[idx == 0] <- 1
+    # After first event: P22 = S(t)
+    valid_idx <- idx > 0
+    retval[valid_idx] <- survival[idx[valid_idx]]
+    # After last event: set to NA if needed
+    retval[t > max(t_AE_star)] <- NA
+
+    retval
   }
 
 
@@ -404,7 +414,7 @@ create_npmle_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
     distribution_functions = list(
       F12 = F12,
       F13 = F13,
-      F23 = F23
+      P22 = P22
     ),
     cum_hazard_functions = list(
       A12 = A12,
@@ -448,9 +458,9 @@ fit_npmle <- function(data,
   estimators <- create_npmle_estimators(
     z_j = fit$z_j,
     lambda_u = fit$lambda_u,
-    Q_j = data_list_to_cpp$Q,
+    Q_j = data_list_to_cpp$Q_j,
     t_CE_star = data_list_to_cpp$t_CE_star,
-    t_AE_star = data_list_to_cpp$t_AE_star,
+    t_AE_star = data_list_to_cpp$t_AE_star
   )
 
 
@@ -460,7 +470,6 @@ fit_npmle <- function(data,
     data = data,
     model_type = "non_parametric_mle",
     model_config = list(
-      data = data,
       data_list = lists$data_list_to_read,
       max_iter = max_iter,
       tol = tol
@@ -469,9 +478,9 @@ fit_npmle <- function(data,
       z_j = fit$z_j[1:data_list_to_cpp$I],
       z_k = fit$z_j[(data_list_to_cpp$I + 1):data_list_to_cpp$I_mark],
       lambda_u = fit$lambda_u,
-      Q_j = data_list_to_cpp$Q,
+      Q_j = data_list_to_cpp$Q_j,
       t_CE_star = data_list_to_cpp$t_CE_star,
-      t_AE_star = data_list_to_cpp$t_AE_star,
+      t_AE_star = data_list_to_cpp$t_AE_star
     ),
     model_specific = list(
       alpha_ji = fit$alpha_ji,
@@ -482,7 +491,7 @@ fit_npmle <- function(data,
     ),
     converged = fit$converged
   )
-  class(idm_fit) <- c("idm_fit", class(idm_fit))
+  class(idm_fit) <- c("idm_object", class(idm_fit))
   return(idm_fit)
 }
 
