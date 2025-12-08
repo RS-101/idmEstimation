@@ -193,7 +193,7 @@ simulate_exact_idm <- function(
 #'   \code{\link{simulate_exact_idm}}, containing true event times.
 #' @param mean_time_between_visits Numeric. Average time between visits
 #' @param sd_time_between_visits Numeric. sd of time between visits
-#' @param probability_of_right_censoring Numeric. Probability of right censoring by uniform variable on 0 to T_obs
+#' @param max_right_censoring_time Numeric. Maximum time for right censoring by uniform variable on 0 to max_right_censoring_time
 #'
 #' @return A list with two components:
 #'   \describe{
@@ -227,7 +227,7 @@ simulate_exact_idm <- function(
 add_censoring_type_1 <- function(exact_idm,
                                  mean_time_between_visits,
                                  sd_time_between_visits,
-                                 probability_of_right_censoring,
+                                 max_right_censoring_time,
                                  prob_censoring_at_last_visit
 ) {
 
@@ -239,9 +239,10 @@ add_censoring_type_1 <- function(exact_idm,
   n <- length(time_to_illness)
 
   # Random right censoring
-  status_dead <- rbinom(n, 1, 1 - probability_of_right_censoring)
-  T_obs <- ifelse(status_dead == 1, time_to_death, runif(n, 0, time_to_death))
+  censoring_time <- stats::runif(n, 0, max_right_censoring_time)
+  status_dead <- ifelse(time_to_death <= censoring_time, 1, 0)
 
+  T_obs <- pmin(censoring_time, time_to_death)
   max_number_of_visits <- ceiling(max(T_obs) / mean_time_between_visits) + 10L
 
   # Create observation schedule with visits
@@ -397,7 +398,7 @@ add_censoring_type_2 <- function(exact_idm,
                                  mean_time_between_visits,
                                  sd_time_between_visits,
                                  increment_in_dropout_prop,
-                                 probability_of_right_censoring,
+                                 max_right_censoring_time,
                                  prob_censoring_at_last_visit) {
 
   stopifnot("exact_idm" %in% class(exact_idm))
@@ -405,8 +406,6 @@ add_censoring_type_2 <- function(exact_idm,
             sd_time_between_visits > 0,
             probability_of_dropout >= 0,
             probability_of_dropout <= 1,
-            probability_of_right_censoring >= 0,
-            probability_of_right_censoring <= 1,
             prob_censoring_at_last_visit >= 0,
             prob_censoring_at_last_visit <= 1)
 
@@ -418,13 +417,13 @@ add_censoring_type_2 <- function(exact_idm,
 
   ## Random right censoring
   ## status_dead: 1 = death observed, 0 = right censored
-  status_dead <- rbinom(n, 1, 1 - probability_of_right_censoring)
+
+  censoring_time <- stats::runif(n, 0, max_right_censoring_time)
+  status_dead <- ifelse(time_to_death <= censoring_time, 1, 0)
 
   ## Observation time: if death observed -> time_to_death,
   ## otherwise uniform on (0, time_to_death)
-  T_obs <- ifelse(status_dead == 1,
-                  time_to_death,
-                  stats::runif(n, 0, time_to_death))
+  T_obs <- pmin(censoring_time, time_to_death)
 
   ## Max number of visits (sufficiently large upper bound)
   max_number_of_visits <- ceiling(max(time_to_death) / mean_time_between_visits) + 10L
