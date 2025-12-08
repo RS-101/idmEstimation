@@ -28,6 +28,6 @@ General wrapper function that applies a censoring mechanism to exact
 illness-death data and computes summary statistics.
 }
 \seealso{
-\code{\link{simulate_exact_idm}}, \code{\link{add_censoring}}
+\code{\link{simulate_exact_idm}}, \code{\link{add_censoring_type_1}}
 }
 \keyword{internal}

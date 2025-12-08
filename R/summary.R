@@ -12,10 +12,10 @@
 #'     \item{T_obs}{Observation or censoring time}
 #'     \item{V_0}{Baseline time}
 #'   }
-#' @param exact_data Data frame with true (uncensored) event times from 
-#'   \code{\link{simulate_exact_idm}}, containing \code{T_ill}, \code{T_death}, 
+#' @param exact_data Data frame with true (uncensored) event times from
+#'   \code{\link{simulate_exact_idm}}, containing \code{T_ill}, \code{T_death},
 #'   and optionally \code{path}.
-#' @param cens_data Optional data frame with censoring mechanism details. 
+#' @param cens_data Optional data frame with censoring mechanism details.
 #'   Default is \code{NULL}.
 #'
 #' @return An object of class \code{"idm_summary"} containing:
@@ -37,30 +37,30 @@
 #'   \item Death rates and patterns (via illness vs. direct)
 #'   \item Visit timing and interval characteristics
 #' }
-#' 
-#' Missing transitions occur when a subject was last seen healthy but later 
+#'
+#' Missing transitions occur when a subject was last seen healthy but later
 #' dies or is censored, creating uncertainty about whether illness occurred.
 #'
 #' @examples
 #' # Simulate data
 #' set.seed(456)
 #' sim_data <- simulate_idm_constant_hazards(n = 200)
-#' 
+#'
 #' # Typically accessed via summary() method on idm_exact_object:
 #' summary(sim_data)
-#' 
+#'
 #' # Can also be called directly if you have both exact and observed data:
 #' # summary_stats <- summarise_simulated_data(
 #' #   obs_data = sim_data$data,
 #' #   exact_data = sim_data$exact_idm
 #' # )
 #'
-#' @seealso \code{\link{summarise_obs_data}}, \code{\link{simulate_idm}}, 
+#' @seealso \code{\link{summarise_obs_data}}, \code{\link{simulate_idm}},
 #'   \code{\link{summary.idm_object}}
 #' @keywords internal
 summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
   # Validate required columns
-  need_cols <- c("status_ill", "status_dead", "V_healthy", "T_obs", "V_0")
+  need_cols <- c("status_ill", "status_dead", "V_healthy", "T_obs")
   missing_cols <- setdiff(need_cols, names(obs_data))
   if (length(missing_cols)) {
     stop("Missing columns in observed data: ", paste(missing_cols, collapse = ", "))
@@ -194,7 +194,7 @@ summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
 #' Prints a formatted summary of illness-death model simulation statistics
 #' comparing observed data with true event times.
 #'
-#' @param x An object of class \code{"idm_summary"} from 
+#' @param x An object of class \code{"idm_summary"} from
 #'   \code{\link{summarise_simulated_data}} or \code{\link{summary.idm_object}}.
 #' @param ... Additional arguments (not currently used).
 #'
@@ -210,7 +210,7 @@ summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
 #'   \item Visit timing statistics
 #'   \item Cross-tabulations of observation patterns
 #' }
-#' 
+#'
 #' This print method is automatically called when printing the result of
 #' \code{summary()} on an \code{"idm_exact_object"}.
 #'
@@ -302,7 +302,7 @@ print.idm_summary <- function(x, ...) {
 #' # Simulate data
 #' set.seed(789)
 #' sim_data <- simulate_idm_constant_hazards(n = 200)
-#' 
+#'
 #' # Summarize observed data only
 #' obs_summary <- summarise_obs_data(sim_data$data)
 #' print(obs_summary)
@@ -352,7 +352,7 @@ summarise_obs_data <- function(obs_data) {
 #'
 #' Prints a formatted summary of observed illness-death data.
 #'
-#' @param x An object of class \code{"idm_obs_summary"} from 
+#' @param x An object of class \code{"idm_obs_summary"} from
 #'   \code{\link{summarise_obs_data}}.
 #' @param ... Additional arguments (not currently used).
 #'
@@ -391,7 +391,7 @@ print.idm_obs_summary <- function(x, ...) {
 #' For simulated data with exact event times (\code{"idm_exact_object"}), this
 #' computes comprehensive statistics comparing observed patterns with true
 #' events using \code{\link{summarise_simulated_data}}.
-#' 
+#'
 #' For fitted models or observed data only (\code{"idm_object"}), this provides
 #' basic summary statistics using \code{\link{summarise_obs_data}}.
 #'

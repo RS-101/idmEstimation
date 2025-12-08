@@ -85,5 +85,5 @@ table(exact_data$path)
 
 }
 \seealso{
-\code{\link{add_censoring}}, \code{\link{simulate_idm}}
+\code{\link{add_censoring_type_1}}, \code{\link{simulate_idm}}
 }
