@@ -1,3 +1,43 @@
+#' Classify Observed Data into Six Case Types
+#'
+#' Partitions illness-death model observations into six mutually exclusive cases
+#' based on whether illness and death are observed, facilitating likelihood computation.
+#'
+#' @param obs_data Data frame with observed illness-death data containing:
+#'   \describe{
+#'     \item{V_0}{Baseline time (typically 0)}
+#'     \item{V_healthy}{Last visit when observed healthy}
+#'     \item{V_ill}{First visit when illness observed (NA if not observed)}
+#'     \item{T_obs}{Observation or censoring time}
+#'     \item{status_dead}{Death indicator (1 = dead, 0 = censored)}
+#'     \item{status_ill}{Illness observation indicator (1 = observed, 0 = not)}
+#'   }
+#'
+#' @return A named list with up to six components (\code{case_A} through \code{case_F}),
+#'   where each case is a list containing the relevant time variables for subjects
+#'   in that case:
+#'   \describe{
+#'     \item{case_A}{Illness and death both observed: needs \code{V_healthy}, \code{V_ill}, \code{T_obs}}
+#'     \item{case_B}{Illness observed, censored while ill: needs \code{V_healthy}, \code{V_ill}, \code{T_obs}}
+#'     \item{case_C}{Death observed, healthy at death: needs \code{T_obs}}
+#'     \item{case_D}{Censored, healthy at censoring: needs \code{T_obs}}
+#'     \item{case_E}{Death observed, unknown state: needs \code{V_healthy}, \code{T_obs}}
+#'     \item{case_F}{Censored, unknown state: needs \code{V_healthy}, \code{T_obs}}
+#'   }
+#'
+#' @details
+#' The six cases represent different censoring patterns:
+#' \itemize{
+#'   \item Cases A & B: Illness is interval-censored between \code{V_healthy} and \code{V_ill}
+#'   \item Cases C & D: Last visit coincides with observation time (no missing data)
+#'   \item Cases E & F: Time gap between last visit and observation (missing transition)
+#' }
+#'
+#' This classification is essential for computing the likelihood, as each case
+#' contributes different terms.
+
+#' @keywords internal
+
 create_case_data <- function(obs_data) {
 
     # verify data components
@@ -21,8 +61,8 @@ create_case_data <- function(obs_data) {
   case_B_idx <- which(status_dead == 0 & status_ill == 1) # needs V_healthy, V_ill, T_obs
   case_C_idx <- which(status_dead == 1 & status_ill == 0 & abs(V_healthy- T_obs) < 1e-8) # needs T_obs
   case_D_idx <- which(status_dead == 0 & status_ill == 0 & abs(V_healthy- T_obs) < 1e-8) # needs T_obs
-  case_E_idx <- which(status_dead == 1 & status_ill == 0 & (T_cutoff - V_healthy) >= 1e-8) # needs V_healthy, T_obs
-  case_F_idx <- which(status_dead == 0 & status_ill == 0 & (T_cutoff - V_healthy) >= 1e-8) # needs V_healthy, T_obs
+  case_E_idx <- which(status_dead == 1 & status_ill == 0 & (T_obs - V_healthy) >= 1e-8) # needs V_healthy, T_obs
+  case_F_idx <- which(status_dead == 0 & status_ill == 0 & (T_obs - V_healthy) >= 1e-8) # needs V_healthy, T_obs
 
 
   case_data <- list()
@@ -81,9 +121,9 @@ summarise_data_object <- function(data_object) {
 
   # Last V_ill form A and B and last T obs from E or F
   summary_data_object$last_possible_12 <- if(
-      "case_A" %in% names(data_object) || 
-      "case_B" %in% names(data_object) || 
-      "case_E" %in% names(data_object) || 
+      "case_A" %in% names(data_object) ||
+      "case_B" %in% names(data_object) ||
+      "case_E" %in% names(data_object) ||
       "case_F" %in% names(data_object)) {
     max(c(
       if ("case_A" %in% names(data_object)) max(data_object$case_A$V_ill, na.rm = TRUE) else -Inf,
@@ -99,7 +139,7 @@ summarise_data_object <- function(data_object) {
 
   # Last T_obs form C or E
   summary_data_object$last_possible_13 <- if(
-      "case_C" %in% names(data_object) || 
+      "case_C" %in% names(data_object) ||
       "case_E" %in% names(data_object)) {
     max(c(
       if ("case_C" %in% names(data_object)) max(data_object$case_C$T_obs, na.rm = TRUE) else -Inf,
@@ -128,9 +168,9 @@ summarise_data_object <- function(data_object) {
 
   # Last T_obs in A, B, F or E
   summary_data_object$last_possible_23 <- if(
-      "case_A" %in% names(data_object) || 
-      "case_B" %in% names(data_object) || 
-      "case_F" %in% names(data_object) || 
+      "case_A" %in% names(data_object) ||
+      "case_B" %in% names(data_object) ||
+      "case_F" %in% names(data_object) ||
       "case_E" %in% names(data_object)) {
     max(c(
       if ("case_A" %in% names(data_object)) max(data_object$case_A$T_obs, na.rm = TRUE) else -Inf,
@@ -141,6 +181,6 @@ summarise_data_object <- function(data_object) {
   } else {
     NA
   }
-  
+
   summary_data_object
 }

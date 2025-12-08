@@ -2,30 +2,30 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 create_penalty_config <- function(penalty_data) {
-    .Call(`_idmEstimation_create_penalty_config`, penalty_data)
+    .Call('_idmEstimation_create_penalty_config', PACKAGE = 'idmEstimation', penalty_data)
 }
 
 create_full_data <- function(data) {
-    .Call(`_idmEstimation_create_full_data`, data)
+    .Call('_idmEstimation_create_full_data', PACKAGE = 'idmEstimation', data)
 }
 
 calc_log_likelihood <- function(full_data_ptr, theta_12, theta_13, theta_23) {
-    .Call(`_idmEstimation_calc_log_likelihood`, full_data_ptr, theta_12, theta_13, theta_23)
+    .Call('_idmEstimation_calc_log_likelihood', PACKAGE = 'idmEstimation', full_data_ptr, theta_12, theta_13, theta_23)
 }
 
 calc_full_penalty <- function(full_data_ptr, theta_12, theta_13, theta_23, kappa_12, kappa_13, kappa_23) {
-    .Call(`_idmEstimation_calc_full_penalty`, full_data_ptr, theta_12, theta_13, theta_23, kappa_12, kappa_13, kappa_23)
+    .Call('_idmEstimation_calc_full_penalty', PACKAGE = 'idmEstimation', full_data_ptr, theta_12, theta_13, theta_23, kappa_12, kappa_13, kappa_23)
 }
 
 calc_penalized_log_likelihood <- function(full_data_ptr, penalty_config_ptr, theta_12, theta_13, theta_23, kappa_12, kappa_13, kappa_23) {
-    .Call(`_idmEstimation_calc_penalized_log_likelihood`, full_data_ptr, penalty_config_ptr, theta_12, theta_13, theta_23, kappa_12, kappa_13, kappa_23)
+    .Call('_idmEstimation_calc_penalized_log_likelihood', PACKAGE = 'idmEstimation', full_data_ptr, penalty_config_ptr, theta_12, theta_13, theta_23, kappa_12, kappa_13, kappa_23)
 }
 
 make_model_data <- function(x) {
-    .Call(`_idmEstimation_make_model_data`, x)
+    .Call('_idmEstimation_make_model_data', PACKAGE = 'idmEstimation', x)
 }
 
 em_fit <- function(md_ptr, z_init = NULL, lambda_init = NULL, max_iter = 100L, tol = 1e-3, verbose = TRUE, eval_likelihood = FALSE, use_true_EM = FALSE) {
-    .Call(`_idmEstimation_em_fit`, md_ptr, z_init, lambda_init, max_iter, tol, verbose, eval_likelihood, use_true_EM)
+    .Call('_idmEstimation_em_fit', PACKAGE = 'idmEstimation', md_ptr, z_init, lambda_init, max_iter, tol, verbose, eval_likelihood, use_true_EM)
 }
 

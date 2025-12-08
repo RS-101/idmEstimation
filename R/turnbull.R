@@ -1,3 +1,24 @@
+#' Fit Turnbull NPMLE for Interval-Censored Data
+#'
+#' Computes the Turnbull non-parametric maximum likelihood estimator for
+#' interval-censored observations using an EM-like algorithm.
+#'
+#' @param obs Data frame with interval observations containing \code{L}, \code{R},
+#'   \code{L_tilde}, \code{R_tilde}.
+#' @param use_EM Logical. If \code{TRUE}, uses EM updates; if \code{FALSE}, uses
+#'   an alternative update scheme. Default is \code{TRUE}.
+#' @param s Numeric vector of initial mass values. If \code{NULL}, initialized randomly.
+#'
+#' @return List with:
+#'   \describe{
+#'     \item{s}{Vector of probability masses on equivalence classes}
+#'     \item{Q}{Matrix of equivalence class intervals (support points)}
+#'   }
+#'
+#' @references
+#' Turnbull, B. W. (1976). The empirical distribution function with arbitrarily
+#' grouped, censored and truncated data. \emph{Journal of the Royal Statistical
+#' Society: Series B}, 38(3), 290-295.
 fit_turnbull <- function(obs, use_EM = T, s = NULL) {
   make_Q <- function() {
     LL <- sort(unique(union(obs$L, obs$R_tilde)))

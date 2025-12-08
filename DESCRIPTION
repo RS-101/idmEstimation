@@ -1,29 +1,29 @@
 Package: idmEstimation
-Type: Package
-Title: What the Package Does (Title Case)
-Version: 0.1.0.9001
+Title: Estimation Methods for Illness-Death Models with Interval Censoring
+Version: 1.0.0
 Authors@R: c(
     person(
-      "Jane", "Doe",
-      email = "jane@example.com",
+      "Rasmus", "Skousen",
+      email = "rasmus.emils@proton.com",
       role = c("aut", "cre")
     )
   )
-Description: More about what it does (maybe more than one line).
-    Continuation lines should be indented.
-License: What license is it under?
+Description: Provides maximum likelihood estimation methods for
+    illness-death models with interval-censored illness times and
+    right-censored death times. Implements non-parametric maximum
+    likelihood estimation (NPMLE), piecewise-constant hazards, and
+    penalized spline-based hazard estimation. Includes simulation tools
+    for generating data from illness-death processes with various
+    censoring mechanisms. Methods are based on the EM algorithm and
+    penalized likelihood approaches suitable for complex multi-state data.
+License: MIT + file LICENSE
 Encoding: UTF-8
-LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
 Imports: 
     splines2,
-    data.table,
     ggplot2,
-    patchwork,
     Rcpp (>= 1.1.0)
 LinkingTo: 
     Rcpp,
     RcppArmadillo
-RoxygenNote: 7.3.3
-Suggests: 
-    testthat (>= 3.0.0)
-Config/testthat/edition: 3

@@ -40,6 +40,65 @@ max_pc_likelihood <- function(cpp_pointer, model_config, long_theta_0 = NULL) {
   )
 }
 
+#' Fit Piecewise-Constant Hazard Model for Illness-Death Data
+#'
+#' Estimates transition hazards using a piecewise-constant (histogram) model.
+#' Hazards are constant within intervals defined by knots and optimized via
+#' maximum likelihood.
+#'
+#' @param data Data frame with observed illness-death data (see \code{\link{fit_npmle}}
+#'   for required columns).
+#' @param knots_12 Numeric vector of knot positions for the 1→2 transition.
+#'   If \code{NULL}, \code{n_knots} equally-spaced knots are created. Default is \code{NULL}.
+#' @param knots_13 Numeric vector of knot positions for the 1→3 transition.
+#'   Default is \code{NULL}.
+#' @param knots_23 Numeric vector of knot positions for the 2→3 transition.
+#'   Default is \code{NULL}.
+#' @param n_knots Integer. Number of knots for each transition if knots are not
+#'   specified. Default is 7.
+#' @param use_bSpline Logical. If \code{TRUE}, uses B-spline basis (degree 0 for
+#'   piecewise constant). If \code{FALSE}, uses I-spline basis. Default is \code{FALSE}.
+#'
+#' @return An object of class \code{"idm_object"} containing:
+#'   \describe{
+#'     \item{estimators}{List with hazard, cumulative hazard, and distribution functions}
+#'     \item{data}{Original input data}
+#'     \item{model_type}{Character: \code{"piecewise_constant"}}
+#'     \item{raw_estimates}{List of theta parameters for each transition}
+#'     \item{model_config}{Knot positions and model configuration}
+#'     \item{converged}{Logical from \code{\link[stats]{optim}}}
+#'     \item{model_specific}{Optimization details}
+#'   }
+#'
+#' @details
+#' The piecewise-constant model assumes hazards are constant within intervals
+#' \eqn{[t_{j}, t_{j+1})} defined by the knots. This is a flexible semi-parametric
+#' approach that can approximate complex hazard shapes.
+#' 
+#' The model uses \code{\link[stats]{optim}} with L-BFGS-B to maximize the likelihood
+#' subject to non-negativity constraints on the hazard parameters.
+#' 
+#' Knot placement affects model fit: too few knots may underfit, while too many
+#' may overfit. Use \code{\link{fit_spline_model}} with cross-validation for
+#' automatic complexity selection.
+#'
+#' @examples
+#' # Simulate data
+#' set.seed(321)
+#' sim_data <- simulate_idm_weibull(n = 300, shape12 = 2, shape13 = 3, shape23 = 1.5)
+#' 
+#' # Fit piecewise-constant model
+#' fit_pc <- fit_pc_model(sim_data$data, n_knots = 6)
+#' 
+#' # Evaluate estimated hazard at specific times
+#' time_points <- c(1, 5, 10, 15)
+#' fit_pc$estimators$hazard_functions$a12(time_points)
+#' 
+#' # Plot results
+#' plot(fit_pc)
+#'
+#' @seealso \code{\link{fit_spline_model}}, \code{\link{fit_npmle}}
+#' @export
 fit_pc_model <- function(data,
                     knots_12 = NULL,
                     knots_13 = NULL,

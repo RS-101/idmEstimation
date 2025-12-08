@@ -1,8 +1,52 @@
-# We should make a function that takes multiple "idm_object" objects and produces a ggplot2 plot 
+#' Plot Illness-Death Model Estimates
+#'
+#' Creates visualizations of estimated hazard functions, cumulative hazards, and
+#' distribution functions from fitted illness-death models. Can overlay multiple
+#' model fits for comparison.
+#'
+#' @param object An object of class \code{"idm_object"} from \code{\link{fit_npmle}},
+#'   \code{\link{fit_pc_model}}, or \code{\link{fit_spline_model}}.
+#' @param ... Additional \code{idm_object}s to overlay on the same plot, or other
+#'   arguments.
+#' @param time_points Integer. Number of time points for evaluating functions.
+#'   Default is 100.
+#'
+#' @return A \code{ggplot} object or a list of \code{ggplot} objects (one for each
+#'   function type: hazards, cumulative hazards, distributions). Use with
+#'   \code{\link[patchwork]{plot_layout}} to arrange multiple plots.
+#'
+#' @details
+#' The function evaluates estimated functions on a grid spanning the observed data
+#' range and creates line plots using \code{\link[ggplot2]{ggplot}}. Different
+#' models are distinguished by line type, and different transitions by color.
+#' 
+#' For NPMLE estimates, functions may return \code{NA} in indeterminate regions
+#' (Turnbull intervals), which appear as gaps in the plots.
+#'
+#' @examples
+#' \donttest{
+#' # Simulate data and fit multiple models
+#' set.seed(333)
+#' sim_data <- simulate_idm_constant_hazards(n = 250)
+#' 
+#' fit_pc <- fit_pc_model(sim_data$data, n_knots = 5)
+#' fit_npm <- fit_npmle(sim_data$data, max_iter = 50)
+#' 
+#' # Plot both fits together
+#' plot(fit_pc, fit_npm)
+#' 
+#' # Plot only one model
+#' plot(fit_pc)
+#' }
+#'
+#' @seealso \code{\link{fit_npmle}}, \code{\link{fit_pc_model}}, \code{\link{fit_spline_model}}
+#' @export
 plot <- function(object, ...) {
   UseMethod("plot", object)
 }
 
+#' @rdname plot
+#' @export
 plot.idm_fit <- function(idm_fit, ..., time_points = 100) {
   library(ggplot2)
   
@@ -119,5 +163,3 @@ plot.idm_fit <- function(idm_fit, ..., time_points = 100) {
     return(plots)
   }
 }
-
-

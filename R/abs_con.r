@@ -259,6 +259,16 @@ setup_case_F_data <- function(data_list, model_config) {
 
 #### Main setup function ####
 
+#' Set Up C++ Model Data Structures
+#'
+#' Internal function that prepares spline basis matrices and observation data
+#' for likelihood computation in C++.
+#'
+#' @param data_object List of case-specific data from \code{\link{create_case_data}}.
+#' @param model_config List with knots, degree, and other model specifications.
+#'
+#' @return External pointer to C++ model data structure.
+#' @keywords internal
 setup_cpp_model <- function(data_object,
                             model_config) {
 
@@ -289,6 +299,17 @@ setup_cpp_model <- function(data_object,
 
 
 
+#' Create Hazard and Distribution Function Estimators
+#'
+#' Internal function that constructs hazard, cumulative hazard, and distribution
+#' function estimators from fitted spline coefficients.
+#'
+#' @param model_config List with knots, degree, and basis specifications.
+#' @param theta_hat_list List with estimated coefficients for each transition.
+#'
+#' @return List of class \code{"idm_estimators"} with hazard, cumulative hazard,
+#'   and distribution functions.
+#' @keywords internal
 create_estimators <- function(model_config, theta_hat_list) {
 
   use_bSpline <- ifelse(is.null(model_config$use_bSpline), FALSE, model_config$use_bSpline)

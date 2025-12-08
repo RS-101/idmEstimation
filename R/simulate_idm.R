@@ -4,9 +4,67 @@
   # Case C: death observed at state 1 without illness V_healthy == T_obs
   # Case D: censored at state 1 without illness V_healthy == T_obs
   # Case E: not observed and death observed either at state 1 or 2
-  # Case F: not observed and censored either at state 1 or 2 
+  # Case F: not observed and censored either at state 1 or 2
 
-
+#' Simulate Exact Illness-Death Model Data
+#'
+#' Simulates exact (uncensored) event times from an illness-death model with
+#' arbitrary time-dependent hazard functions. Uses inverse transform sampling
+#' with numerical integration to generate transition times.
+#'
+#' @param n Integer. Number of subjects to simulate.
+#' @param a12 Function of one argument (absolute time \code{t}) giving the hazard
+#'   for the 1→2 (healthy to illness) transition.
+#' @param a13 Function of one argument (absolute time \code{t}) giving the hazard
+#'   for the 1→3 (healthy to death) transition.
+#' @param a23 Function of one argument (absolute time \code{t}) giving the hazard
+#'   for the 2→3 (illness to death) transition. This is a calendar-time hazard.
+#' @param t0 Numeric. Starting time (entry time) for all subjects. Default is 0.
+#' @param tmax Numeric. Maximum follow-up time. Events occurring after \code{tmax}
+#'   are treated as never occurring (set to \code{Inf}). Default is \code{Inf}.
+#' @param init_step Numeric. Initial step size for the bracketing search in
+#'   inversion sampling. Default is 1.
+#' @param int_abs_tol Numeric. Absolute tolerance for numerical integration
+#'   (passed to \code{\link[stats]{integrate}}). Default is 1e-8.
+#' @param root_tol Numeric. Tolerance for root finding (passed to
+#'   \code{\link[stats]{uniroot}}). Default is 1e-8.
+#' @param max_doublings Integer. Maximum number of bracket doublings allowed
+#'   in the search for event times. Default is 60.
+#'
+#' @return A data frame with class \code{"exact_idm"} containing:
+#'   \describe{
+#'     \item{id}{Subject ID (1 to \code{n}).}
+#'     \item{T_ill}{Time of illness (transition 1→2). \code{Inf} if direct death occurred.}
+#'     \item{T_death}{Time of death (transition to state 3).}
+#'     \item{path}{Factor indicating the path: \code{"1->3"} (direct death) or
+#'       \code{"1->2->3"} (illness then death).}
+#'   }
+#'
+#' @details
+#' The function simulates competing risks from state 1 (healthy) using calendar-time
+#' hazards \code{a12(t)} and \code{a13(t)}. If illness occurs first, the death time
+#' from state 2 is drawn using the calendar-time hazard \code{a23(t)} starting from
+#' the illness time.
+#'
+#' Event times are generated via inverse transform sampling: for a hazard \code{h(t)},
+#' the event time \code{T} satisfies \eqn{\int_{t_0}^T h(u) du = E}, where \code{E ~ Exp(1)}.
+#' This integral equation is solved using numerical integration and root finding.
+#'
+#' @examples
+#' # Constant hazards
+#' set.seed(123)
+#' exact_data <- simulate_exact_idm(
+#'   n = 100,
+#'   a12 = function(t) rep(0.01, length(t)),
+#'   a13 = function(t) rep(0.005, length(t)),
+#'   a23 = function(t) rep(0.02, length(t))
+#' )
+#' head(exact_data)
+#' table(exact_data$path)
+#'
+#' @seealso \code{\link{add_censoring}}, \code{\link{simulate_idm}}
+#'
+#' @export
 simulate_exact_idm <- function(
   n,
   a12, a13, a23, # all are functions of ABSOLUTE calendar time t
@@ -123,6 +181,68 @@ simulate_exact_idm <- function(
 }
 
 
+#' Add Interval Censoring to Exact Illness-Death Data
+#'
+#' Applies an observation schedule with interval censoring and right-censoring
+#' to exact illness-death model data. Illness times become interval-censored between
+#' visits, and subjects may be censored before death.
+#'
+#' @param exact_idm Data frame with class \code{"exact_idm"} from
+#'   \code{\link{simulate_exact_idm}}, containing true event times.
+#' @param average_number_of_visits Numeric. Average number of observation visits
+#'   per subject across the follow-up period.
+#'
+#' @return A list with two components:
+#'   \describe{
+#'     \item{obs}{Data frame with observed (censored) data containing:
+#'       \itemize{
+#'         \item \code{id}: Subject ID
+#'         \item \code{V_0}: Baseline visit time (always 0)
+#'         \item \code{V_healthy}: Last visit when observed healthy
+#'         \item \code{V_ill}: First visit when illness observed (NA if never observed)
+#'         \item \code{T_obs}: Observation/censoring time
+#'         \item \code{status_dead}: Indicator for observed death (1) or censoring (0)
+#'         \item \code{status_ill}: Indicator for observed illness (1) or not (0)
+#'         \item \code{case}: Factor classifying observation pattern (A-F)
+#'       }}
+#'     \item{cens_mechanism}{Data frame with censoring mechanism details including
+#'       observation schedules and censoring times.}
+#'   }
+#'
+#' @details
+#' The function creates an observation schedule with visits spaced to achieve
+#' approximately \code{average_number_of_visits} over each subject's follow-up.
+#' Visits are jittered with small random noise to mimic realistic data.
+#'
+#' Censoring times are drawn from Uniform(0, 3 * death_time) for each subject.
+#' Illness is only observed if it occurs between two consecutive visits within
+#' the observation period.
+#'
+#' Six observation cases are defined:
+#' \itemize{
+#'   \item Case A: Illness and death both observed
+#'   \item Case B: Illness observed, censored while ill
+#'   \item Case C: Death observed, healthy at last visit before death
+#'   \item Case D: Censored, healthy at last visit
+#'   \item Case E: Death observed, unknown if healthy or ill (missing transition)
+#'   \item Case F: Censored, unknown if healthy or ill (missing transition)
+#' }
+#'
+#' @examples
+#' set.seed(456)
+#' exact_data <- simulate_exact_idm(
+#'   n = 50,
+#'   a12 = function(t) rep(0.01, length(t)),
+#'   a13 = function(t) rep(0.005, length(t)),
+#'   a23 = function(t) rep(0.02, length(t))
+#' )
+#' censored_data <- add_censoring(exact_data, average_number_of_visits = 10)
+#' head(censored_data$obs)
+#' table(censored_data$obs$case)
+#'
+#' @seealso \code{\link{simulate_exact_idm}}, \code{\link{simulate_idm}}
+#'
+#' @export
 add_censoring <- function(exact_idm,
                           average_number_of_visits) {
 
@@ -207,7 +327,7 @@ add_censoring <- function(exact_idm,
   # Case C death observed at state 1 without illness V_healthy == T_obs
   # Case D censored at state 1 without illness V_healthy == T_obs
   # Case E not observed and death observed either at state 1 or 2
-  # Case F not observed and censored either at state 1 or 2 
+  # Case F not observed and censored either at state 1 or 2
 
   status[has_interval & died_at_cutoff] <- "A"
   status[has_interval & !died_at_cutoff] <- "B"
@@ -347,7 +467,7 @@ add_censoring_frydman <- function(exact_idm, scenario = 1L) {
 
   # Standardized status classification
   has_interval <- !is.na(V_ill)
-  
+
   status <- character(n)
   status[has_interval & status_dead] <- "A"
   status[has_interval & !status_dead] <- "B"
@@ -418,14 +538,14 @@ add_censoring_joly <- function(exact_idm) {
 
   # Standardized status classification
   has_interval <- !is.na(V_ill)
-  
+
   status <- character(n)
   # Case A: illness and death observed
   # Case B: illness observed and censored while ill
   # Case C: death observed at state 1 without illness V_healthy == T_obs
   # Case D: censored at state 1 without illness V_healthy == T_obs
   # Case E: not observed and death observed either at state 1 or 2
-  # Case F: not observed and censored either at state 1 or 2 
+  # Case F: not observed and censored either at state 1 or 2
 
   status[has_interval & status_dead] <- "A"
   status[has_interval & !status_dead] <- "B"
@@ -452,6 +572,26 @@ add_censoring_joly <- function(exact_idm) {
 
 #### General Wrapper ####
 
+#' Simulate Illness-Death Model Data with Censoring
+#'
+#' General wrapper function that applies a censoring mechanism to exact
+#' illness-death data and computes summary statistics.
+#'
+#' @param exact_idm Data frame with class \code{"exact_idm"} containing true event times.
+#' @param censoring_fn Function that applies censoring to \code{exact_idm}.
+#'   Must return a list with components \code{obs} (observed data) and
+#'   \code{cens_mechanism} (censoring details).
+#' @param ... Additional arguments passed to \code{censoring_fn}.
+#'
+#' @return A list with class \code{"simulated_idm"} containing:
+#'   \describe{
+#'     \item{obs}{Observed (censored) data frame}
+#'     \item{cens_mechanism}{Censoring mechanism details}
+#'     \item{summary}{Summary statistics from \code{\link{summarise_simulated_data}}}
+#'   }
+#'
+#' @seealso \code{\link{simulate_exact_idm}}, \code{\link{add_censoring}}
+#' @keywords internal
 simulate_idm <- function(exact_idm, censoring_fn, ...) {
   # Apply censoring function
   censored_data <- censoring_fn(exact_idm, ...)
@@ -476,6 +616,45 @@ simulate_idm <- function(exact_idm, censoring_fn, ...) {
 
 #### Specific Simulation Endpoints ####
 
+#' Simulate Illness-Death Data with Constant Hazards
+#'
+#' Generates illness-death model data with constant transition hazards and
+#' interval-censored illness times. Returns a complete \code{idm_object} with
+#' data and true estimators.
+#'
+#' @param n Integer. Number of subjects to simulate. Default is 300.
+#' @param a12 Numeric. Constant hazard for 1→2 (healthy to illness) transition. Default is 0.0008.
+#' @param a13 Numeric. Constant hazard for 1→3 (healthy to death) transition. Default is 0.0002.
+#' @param a23 Numeric. Constant hazard for 2→3 (illness to death) transition. Default is 0.0016.
+#' @param average_number_of_visits Numeric. Average number of observation visits. Default is 10.
+#'
+#' @return An object of class \code{c("idm_object", "idm_exact_object")} containing:
+#'   \describe{
+#'     \item{data}{Simulated observed data frame}
+#'     \item{model_type}{Character string describing the simulation model}
+#'     \item{model_config}{List with simulation parameters and summaries}
+#'     \item{estimators}{True hazard, cumulative hazard, and distribution functions}
+#'     \item{exact_idm}{Data frame with true (uncensored) event times}
+#'   }
+#'
+#' @details
+#' These default hazard values are commonly used in illness-death model literature
+#' and provide realistic event rates for many applications.
+#'
+#' @examples
+#' set.seed(789)
+#' sim_data <- simulate_idm_constant_hazards(n = 200, average_number_of_visits = 8)
+#' head(sim_data$data)
+#'
+#' # View summary comparing observed vs exact data
+#' summary(sim_data)
+#'
+#' # Compare with estimated model
+#' fit <- fit_pc_model(sim_data$data, n_knots = 5)
+#' plot(fit, sim_data)
+#'
+#' @seealso \code{\link{simulate_idm_weibull}}, \code{\link{fit_pc_model}}
+#' @export
 simulate_idm_constant_hazards <- function(
   n = 300,
   a12 = 0.0008,
@@ -538,13 +717,62 @@ simulate_idm_constant_hazards <- function(
     data = data,
     model_type = paste0("simulation_constant_hazards_n", n),
     model_config = model_config,
-    estimators = estimators
+    estimators = estimators,
+    exact_idm = exact_idm
   )
 
-  class(retval) <- c("idm_object", class(retval))
+  class(retval) <- c("idm_object", "idm_exact_object", class(retval))
   retval
 }
 
+#' Simulate Illness-Death Data with Weibull Hazards
+#'
+#' Generates illness-death model data with Weibull-distributed transition times.
+#' Allows flexible specification of time-dependent hazards through shape and scale
+#' parameters.
+#'
+#' @param n Integer. Number of subjects to simulate. Default is 1000.
+#' @param shape12 Numeric. Weibull shape parameter for 1→2 transition. Default is 3.
+#' @param scale12 Numeric. Weibull scale parameter for 1→2 transition. Default is 1.
+#' @param shape13 Numeric. Weibull shape parameter for 1→3 transition. Default is 5.
+#' @param scale13 Numeric. Weibull scale parameter for 1→3 transition. Default is 1.
+#' @param shape23 Numeric. Weibull shape parameter for 2→3 transition. Default is 2.
+#' @param scale23 Numeric. Weibull scale parameter for 2→3 transition. Default is 1.
+#' @param average_number_of_visits Numeric. Average number of observation visits. Default is 10.
+#'
+#' @return An object of class \code{c("idm_object", "idm_exact_object")} containing:
+#'   \describe{
+#'     \item{data}{Simulated observed data frame}
+#'     \item{model_type}{Character string describing the simulation model}
+#'     \item{model_config}{List with simulation parameters and summaries}
+#'     \item{estimators}{True hazard, cumulative hazard, and distribution functions}
+#'     \item{exact_idm}{Data frame with true (uncensored) event times}
+#'   }
+#'
+#' @details
+#' The Weibull hazard function is \eqn{h(t) = (k/\lambda)(t/\lambda)^{k-1}}, where
+#' \code{k} is the shape and \code{\lambda} is the scale parameter.
+#'
+#' Shape parameters control the hazard's time dependence:
+#' \itemize{
+#'   \item k < 1: Decreasing hazard over time
+#'   \item k = 1: Constant hazard (exponential distribution)
+#'   \item k > 1: Increasing hazard over time
+#' }
+#'
+#' @examples
+#' set.seed(101)
+#' sim_data <- simulate_idm_weibull(
+#'   n = 500,
+#'   shape12 = 2, scale12 = 10,
+#'   shape13 = 3, scale13 = 15,
+#'   shape23 = 1.5, scale23 = 8
+#' )
+#' # View comprehensive summary with exact vs observed comparison
+#' summary(sim_data)
+#'
+#' @seealso \code{\link{simulate_idm_constant_hazards}}, \code{\link{fit_spline_model}}
+#' @export
 simulate_idm_weibull <- function(
   n = 1000,
   shape12 = 3, scale12 = 1,
@@ -616,16 +844,31 @@ simulate_idm_weibull <- function(
 
   retval <- list(
     data = data,
-    model_type = paste0("simulation_weibull_n", n),
+    model_type = paste0("simulation_constant_hazards_n", n),
     model_config = model_config,
-    estimators = estimators
+    estimators = estimators,
+    exact_idm = exact_idm
   )
 
-  class(retval) <- c("idm_object", class(retval))
+  class(retval) <- c("idm_object", "idm_exact_object", class(retval))
   retval
 }
 
-
+#' Simulate Illness-Death Data with using Joly's approach
+#'
+#'
+#' @param n Integer. Number of subjects to simulate. Default is 1000.
+#
+#' @return An object of class \code{c("idm_object", "idm_exact_object")} containing:
+#'   \describe{
+#'     \item{data}{Simulated observed data frame}
+#'     \item{model_type}{Character string describing the simulation model}
+#'     \item{model_config}{List with simulation parameters and summaries}
+#'     \item{estimators}{True hazard, cumulative hazard, and distribution functions}
+#'     \item{exact_idm}{Data frame with true (uncensored) event times}
+#'   }
+#'
+#' @export
 simulate_idm_joly <- function(n) {
   # Mixture hazard: 0.4*Gamma(37,1.5) + 0.6*Gamma(20,2)
   h_mix <- function(t) {
@@ -706,14 +949,32 @@ simulate_idm_joly <- function(n) {
     data = data,
     model_type = paste0("simulation_joly_n", n),
     model_config = model_config,
-    estimators = estimators
+    estimators = estimators,
+    exact_idm = exact_idm
   )
 
-  class(retval) <- c("idm_object", class(retval))
+  class(retval) <- c("idm_object", "idm_exact_object", class(retval))
 
   retval
 }
 
+
+
+#' Simulate Illness-Death Data with using Frydman and Szareks's approach
+#'
+#'
+#' @param n Integer. Number of subjects to simulate. Default is 1000.
+#' @param scenario Determining censoring scheme default is 1.
+#' @return An object of class \code{c("idm_object", "idm_exact_object")} containing:
+#'   \describe{
+#'     \item{data}{Simulated observed data frame}
+#'     \item{model_type}{Character string describing the simulation model}
+#'     \item{model_config}{List with simulation parameters and summaries}
+#'     \item{estimators}{True hazard, cumulative hazard, and distribution functions}
+#'     \item{exact_idm}{Data frame with true (uncensored) event times}
+#'   }
+#'
+#' @export
 simulate_idm_frydman <- function(n, scenario = 1L) {
   # Constant hazards as in Frydman paper
   a12 <- function(x) rep(0.0008, length(x))
@@ -721,7 +982,7 @@ simulate_idm_frydman <- function(n, scenario = 1L) {
   a13 <- function(x) rep(0.0002, length(x))
 
   # Simulate exact data
-  exact_data <- simulate_exact_idm(
+  exact_idm <- simulate_exact_idm(
     n = n,
     a12 = a12,
     a23 = a23,
@@ -730,7 +991,7 @@ simulate_idm_frydman <- function(n, scenario = 1L) {
 
   # Apply Frydman censoring and summarize
   result <- simulate_idm(
-    exact_idm = exact_data,
+    exact_idm = exact_idm,
     censoring_fn = add_censoring_frydman,
     scenario = scenario
   )
@@ -770,196 +1031,10 @@ simulate_idm_frydman <- function(n, scenario = 1L) {
     data = data,
     model_type = paste0("simulation_frydman_n", n, "_scenario", scenario),
     model_config = model_config,
-    estimators = estimators
+    estimators = estimators,
+    exact_idm = exact_idm
   )
 
-  class(retval) <- c("idm_object", class(retval))
+  class(retval) <- c("idm_object", "idm_exact_object", class(retval))
   retval
 }
-
-
-#### Summary Function ####
-
-summarise_simulated_data <- function(obs_data, exact_data, cens_data = NULL) {
-  # Validate required columns
-  need_cols <- c("status_ill", "status_dead", "V_healthy", "T_obs", "V_0")
-  missing_cols <- setdiff(need_cols, names(obs_data))
-  if (length(missing_cols)) {
-    stop("Missing columns in observed data: ", paste(missing_cols, collapse = ", "))
-  }
-
-  n <- nrow(obs_data)
-  observed_illness <- as.logical(obs_data$status_ill)
-  observed_death <- as.logical(obs_data$status_dead)
-  unknown_transition <- !observed_illness & (obs_data$V_healthy < obs_data$T_obs)
-
-  # Basic counts
-  n_any_death <- sum(observed_death, na.rm = TRUE)
-  n_death_via_illness <- sum(observed_death & observed_illness, na.rm = TRUE)
-  n_death_exact <- sum(observed_death & !unknown_transition & !observed_illness, na.rm = TRUE)
-  n_death_missing_transition <- sum(observed_death & unknown_transition & !observed_illness, na.rm = TRUE)
-  n_censoring_exact <- sum(!observed_death & !unknown_transition, na.rm = TRUE)
-  n_censoring_missing_transition <- sum(!observed_death & unknown_transition & !observed_illness, na.rm = TRUE)
-  n_ill_observed <- sum(observed_illness, na.rm = TRUE)
-  n_no_ill_obs <- n - n_ill_observed
-  n_missing <- n_censoring_missing_transition + n_death_missing_transition
-
-  # Percentages
-  p_death <- n_any_death / n
-  p_illness_observed <- n_ill_observed / n
-  p_missing_transition_given_no_obs <- if (n_no_ill_obs > 0) n_missing / n_no_ill_obs else NA_real_
-  p_missing_transition_overall <- n_missing / n
-
-  # From exact data: percentage with illness through state 2
-  illness_happened_before_T_obs <- is.finite(exact_data$T_ill) & (exact_data$T_ill <= obs_data$T_obs)
-  n_true_illness_before_cutoff <- sum(illness_happened_before_T_obs, na.rm = TRUE)
-  n_unobserved_illness <- sum(illness_happened_before_T_obs & !observed_illness, na.rm = TRUE)
-  p_illness_unobserved <- if (n_true_illness_before_cutoff > 0) {
-    n_unobserved_illness / n_true_illness_before_cutoff
-  } else NA_real_
-
-  # Visit timing statistics (only for those with observed illness)
-  if (n_ill_observed > 0) {
-    ill_idx <- which(observed_illness)
-    visit_intervals <- obs_data$V_ill[ill_idx] - obs_data$V_healthy[ill_idx]
-    mean_interval_between_visits <- mean(visit_intervals, na.rm = TRUE)
-    sd_interval_between_visits <- sd(visit_intervals, na.rm = TRUE)
-  } else {
-    mean_interval_between_visits <- NA_real_
-    sd_interval_between_visits <- NA_real_
-  }
-
-  # Time between last visit and cutoff for non-observed illness
-  if (n_no_ill_obs > 0) {
-    no_ill_idx <- which(!observed_illness)
-    time_to_cutoff <- obs_data$T_obs[no_ill_idx] - obs_data$V_healthy[no_ill_idx]
-    mean_time_last_visit_to_cutoff <- mean(time_to_cutoff, na.rm = TRUE)
-    sd_time_last_visit_to_cutoff <- sd(time_to_cutoff, na.rm = TRUE)
-  } else {
-    mean_time_last_visit_to_cutoff <- NA_real_
-    sd_time_last_visit_to_cutoff <- NA_real_
-  }
-
-  # True path classification
-  true_path <- rep(NA_character_, n)
-  if (!is.null(exact_data$path)) {
-    true_path <- as.character(exact_data$path)
-  }
-
-  # Build result
-  summary_result <- list(
-    n = n,
-
-    # Death statistics
-    death = list(
-      n_any_death = n_any_death,
-      n_death_via_illness = n_death_via_illness,
-      n_death_exact = n_death_exact,
-      n_death_missing_transition = n_death_missing_transition,
-      p_death = p_death
-    ),
-
-    # Illness statistics
-    illness = list(
-      n_ill_observed = n_ill_observed,
-      n_no_ill_obs = n_no_ill_obs,
-      n_true_illness_before_cutoff = n_true_illness_before_cutoff,
-      n_unobserved_illness = n_unobserved_illness,
-      p_illness_observed = p_illness_observed,
-      p_illness_unobserved = p_illness_unobserved
-    ),
-
-    # Censoring statistics
-    censoring = list(
-      n_censoring_exact = n_censoring_exact,
-      n_censoring_missing_transition = n_censoring_missing_transition
-    ),
-
-    # Missing transition statistics
-    missing_transition = list(
-      n_missing = n_missing,
-      p_missing_given_no_obs = p_missing_transition_given_no_obs,
-      p_missing_overall = p_missing_transition_overall
-    ),
-
-    # Visit timing
-    visit_timing = list(
-      mean_interval_between_visits = mean_interval_between_visits,
-      sd_interval_between_visits = sd_interval_between_visits,
-      mean_time_last_visit_to_cutoff = mean_time_last_visit_to_cutoff,
-      sd_time_last_visit_to_cutoff = sd_time_last_visit_to_cutoff
-    ),
-
-    # Cross-tabulation
-    tables = list(
-      observed_status = table(
-        Illness = observed_illness,
-        Death = observed_death,
-        useNA = "ifany"
-      ),
-      true_vs_observed = if (!all(is.na(true_path))) {
-        table(
-          TruePath = true_path,
-          ObservedIllness = observed_illness,
-          useNA = "ifany"
-        )
-      } else NULL
-    )
-  )
-
-  class(summary_result) <- c("idm_summary", class(summary_result))
-  summary_result
-}
-
-print.idm_summary <- function(x, ...) {
-  cat("=== IDM Simulation Summary ===\n")
-  cat(sprintf("Sample size: %d\n\n", x$n))
-
-  cat("--- Death Statistics ---\n")
-  cat(sprintf("  Total deaths: %d (%.1f%%)\n",
-              x$death$n_any_death, 100 * x$death$p_death))
-  cat(sprintf("  Deaths via illness: %d\n", x$death$n_death_via_illness))
-  cat(sprintf("  Direct deaths (exact): %d\n", x$death$n_death_exact))
-  cat(sprintf("  Deaths with missing transition: %d\n\n",
-              x$death$n_death_missing_transition))
-
-  cat("--- Illness Statistics ---\n")
-  cat(sprintf("  Illness observed: %d (%.1f%%)\n",
-              x$illness$n_ill_observed, 100 * x$illness$p_illness_observed))
-  cat(sprintf("  True illness before cutoff: %d\n",
-              x$illness$n_true_illness_before_cutoff))
-  cat(sprintf("  Unobserved illness: %d (%.1f%% of true illness)\n\n",
-              x$illness$n_unobserved_illness,
-              100 * ifelse(is.na(x$illness$p_illness_unobserved), 0,
-                           x$illness$p_illness_unobserved)))
-
-  cat("--- Missing Transitions ---\n")
-  cat(sprintf("  Total missing transitions: %d\n", x$missing_transition$n_missing))
-  cat(sprintf("  Among no observed illness: %.1f%%\n",
-              100 * x$missing_transition$p_missing_given_no_obs))
-  cat(sprintf("  Overall: %.1f%%\n\n",
-              100 * x$missing_transition$p_missing_overall))
-
-  cat("--- Visit Timing ---\n")
-  if (!is.na(x$visit_timing$mean_interval_between_visits)) {
-    cat(sprintf("  Mean interval between visits (observed illness): %.2f (SD: %.2f)\n",
-                x$visit_timing$mean_interval_between_visits,
-                x$visit_timing$sd_interval_between_visits))
-  }
-  if (!is.na(x$visit_timing$mean_time_last_visit_to_cutoff)) {
-    cat(sprintf("  Mean time last visit to cutoff (no obs illness): %.2f (SD: %.2f)\n",
-                x$visit_timing$mean_time_last_visit_to_cutoff,
-                x$visit_timing$sd_time_last_visit_to_cutoff))
-  }
-
-  cat("\n--- Observed Status Table ---\n")
-  print(x$tables$observed_status)
-
-  if (!is.null(x$tables$true_vs_observed)) {
-    cat("\n--- True Path vs Observed Illness ---\n")
-    print(x$tables$true_vs_observed)
-  }
-
-  invisible(x)
-}
-

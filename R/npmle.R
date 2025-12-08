@@ -1,6 +1,7 @@
 data_to_list_format <- function(data, is_equal_tol = 1e-8) {
 
   intersect.interval <- function(x, y) {
+    if(is.null(x) | is.null(y)) return(c())
     if (inherits(y, "interval") & inherits(x, "numeric")) {
       x_temp <- x
       x <- y
@@ -145,6 +146,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     N_D <- 0
     t_D <- c()
   }
+
 
   if("case_E" %in% names(case_data_list)) {
     N_E <- length(case_data_list$case_E$T_obs)
@@ -456,6 +458,69 @@ create_npmle_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
   estimators
 }
 
+#' Fit Non-Parametric Maximum Likelihood Estimator for Illness-Death Model
+#'
+#' Estimates transition probabilities and hazards for an illness-death model
+#' using non-parametric maximum likelihood estimation (NPMLE) via the EM algorithm.
+#' Handles interval-censored illness times and right-censored death times.
+#'
+#' @param data Data frame with observed illness-death data containing:
+#'   \describe{
+#'     \item{V_healthy}{Last visit when observed healthy}
+#'     \item{V_ill}{First visit when illness observed (NA if not observed)}
+#'     \item{T_obs}{Observation or censoring time}
+#'     \item{status_dead}{Death indicator (1 = dead, 0 = censored)}
+#'     \item{status_ill}{Illness observation indicator (1 = observed, 0 = not)}
+#'   }
+#' @param max_iter Integer. Maximum number of EM iterations. Default is 200.
+#' @param tol Numeric. Convergence tolerance for parameter changes. Default is 1e-4.
+#' @param verbose Logical. If \code{TRUE}, prints iteration progress. Default is \code{FALSE}.
+#' @param eval_likelihood Logical. If \code{TRUE}, evaluates and stores likelihood
+#'   at each iteration. Default is \code{FALSE}.
+#' @param use_true_EM Logical. If \code{TRUE}, uses the true EM update; if \code{FALSE},
+#'   uses a stabilized variant. Default is \code{FALSE}.
+#'
+#' @return An object of class \code{"idm_object"} containing:
+#'   \describe{
+#'     \item{estimators}{List with distribution and cumulative hazard functions:
+#'       \code{F12} (illness CDF), \code{F13} (direct death CDF),
+#'       \code{P22} (survival in state 2), \code{A12}, \code{A13}, \code{A23}
+#'       (cumulative hazards)}
+#'     \item{data}{Original input data}
+#'     \item{model_type}{Character: \code{"non_parametric_mle"}}
+#'     \item{model_config}{List with algorithm settings and data structures}
+#'     \item{raw_estimators}{Mass/probability vectors on support points}
+#'     \item{model_specific}{EM algorithm details and convergence history}
+#'     \item{converged}{Logical indicating convergence}
+#'   }
+#'
+#' @details
+#' The NPMLE approach places probability mass on a finite set of support points
+#' determined by the observed data structure. The EM algorithm iteratively updates
+#' these masses to maximize the likelihood.
+#'
+#' The estimators are step functions defined on equivalence classes (Turnbull intervals)
+#' and may be non-unique within each interval. The returned functions handle this
+#' by returning \code{NA} for time points within the indeterminate regions.
+#'
+#' @examples
+#' # Simulate data
+#' set.seed(2024)
+#' sim_data <- simulate_idm_constant_hazards(n = 200)
+#'
+#' # Fit NPMLE
+#' fit_npmle_result <- fit_npmle(sim_data$data, max_iter = 100, tol = 1e-3)
+#'
+#' # Check convergence
+#' fit_npmle_result$converged
+#'
+#' # Evaluate cumulative hazards
+#' time_grid <- seq(0, 50, by = 5)
+#' fit_npmle_result$estimators$cum_hazard_functions$A12(time_grid)
+#'
+#'
+#' @seealso \code{\link{fit_pc_model}}, \code{\link{fit_spline_model}}
+#' @export
 fit_npmle <- function(data,
                       max_iter = 200,
                       tol = 1e-4,
