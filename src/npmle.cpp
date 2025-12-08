@@ -17,7 +17,7 @@ struct ModelData {
   double s_max, R_max, T_CE_star_max;
 
   // --- vectors ---
-  NumericVector t_D, L_F, t_F, t_C, L_E, t_E,
+  NumericVector t_D, L_F, t_F, L_E, t_E,
   L_AB, R_AB, t_AB, t_CE_star, t_AE_star,
   t_DF;
 
@@ -77,7 +77,6 @@ struct ModelData {
 
   void check() {
     // ---------- dimension & consistency checks ----------
-    if ((int)t_D.size() != N_D) stop("length(t_D) != N_D");
     if ((int)t_DF.size() != (N_D + N_F)) stop("length(t_DF) != N_D + N_F");
 
     if (Q_j.ncol() != 2) stop("Q_j must have 2 columns");
@@ -149,7 +148,6 @@ struct ModelData {
     t_D = as<NumericVector>(x["t_D"]);
     L_F = as<NumericVector>(x["L_F"]);
     t_F = as<NumericVector>(x["t_F"]);
-    t_C = as<NumericVector>(x["t_C"]);
     L_E = as<NumericVector>(x["L_E"]);
     t_E = as<NumericVector>(x["t_E"]);
     L_AB = as<NumericVector>(x["L_AB"]);

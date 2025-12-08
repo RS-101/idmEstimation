@@ -1,7 +1,7 @@
 data_to_list_format <- function(data, is_equal_tol = 1e-8) {
 
   intersect.interval <- function(x, y) {
-    if(is.null(x) | is.null(y)) return(c())
+    if(is.null(x) | is.null(y)) return(c(NA_real_))
     if (inherits(y, "interval") & inherits(x, "numeric")) {
       x_temp <- x
       x <- y
@@ -91,7 +91,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     Q
   }
 
-  to_mat <- function(x) if (is.matrix(x)) x else as.matrix(unclass(x))
+  to_mat <- function(x) if (is.matrix(x) | is.null(x)) x else as.matrix(unclass(x))
 
 
 
@@ -114,9 +114,9 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     t_A <- case_data_list$case_A$T_obs
   } else {
     N_A <- 0
-    L_A <- c()
-    R_A <- c()
-    t_A <- c()
+    L_A <- c(NA_real_)
+    R_A <- c(NA_real_)
+    t_A <- c(NA_real_)
   }
 
   if("case_B" %in% names(case_data_list)) {
@@ -126,9 +126,9 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     t_B <- case_data_list$case_B$T_obs
   } else {
     N_B <- 0
-    L_B <- c()
-    R_B <- c()
-    t_B <- c()
+    L_B <- c(NA_real_)
+    R_B <- c(NA_real_)
+    t_B <- c(NA_real_)
   }
 
   if("case_C" %in% names(case_data_list)) {
@@ -136,7 +136,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     t_C <- case_data_list$case_C$T_obs
   } else {
     N_C <- 0
-    t_C <- c()
+    t_C <- c(NA_real_)
   }
 
   if("case_D" %in% names(case_data_list)) {
@@ -144,7 +144,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     t_D <- case_data_list$case_D$T_obs
   } else {
     N_D <- 0
-    t_D <- c()
+    t_D <- c(NA_real_)
   }
 
 
@@ -154,8 +154,8 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     t_E <- case_data_list$case_E$T_obs
   } else {
     N_E <- 0
-    L_E <- c()
-    t_E <- c()
+    L_E <- c(NA_real_)
+    t_E <- c(NA_real_)
   }
 
   if("case_F" %in% names(case_data_list)) {
@@ -164,30 +164,31 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     t_F <- case_data_list$case_F$T_obs
   } else {
     N_F <- 0
-    L_F <- c()
-    t_F <- c()
+    L_F <- c(NA_real_)
+    t_F <- c(NA_real_)
   }
 
 
   N_AB <- N_A + N_B
-  L_AB <- c(L_A, L_B)
-  R_AB <- c(R_A, R_B)
-  t_AB <- c(t_A, t_B)
+  L_AB <- na.omit(c(L_A, L_B))
+  R_AB <- na.omit(c(R_A, R_B))
+  t_AB <- na.omit(c(t_A, t_B))
 
   stopifnot(all(L_AB < R_AB))
   stopifnot(N_A <= N_AB)
 
-  t_DF <- c(t_D, t_F)
+  t_DF <- na.omit(c(t_D, t_F))
 
   ##### N_CE_star: E* - Obs and potential 1 -> 3 ####
-  t_CE_star <- unique(c(t_C, t_E))
+  t_CE_star <- na.omit(unique(c(t_C, t_E)))
+
   # r_C should only count exact observations from case 2 (t_C), not t_E
   # sum(r_C) should equal N_C, not N_C + N_E
   r_C <- as.numeric(table(factor(t_C, levels = t_CE_star)))
   N_CE_star <- length(t_CE_star)
 
   ##### N_AE_star: T* - Obs and potential entry to state 3 from state 2: 1 -> 2 -> 3 ####
-  t_AE_star <- unique(c(t_A, t_E))
+  t_AE_star <- na.omit(unique(c(t_A, t_E)))
   r_A <- as.numeric(table(factor(c(t_A), levels = t_AE_star)))
 
   N_A_star <- length(unique(t_A))
@@ -210,10 +211,14 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   N_ABE = N_AB + N_E
 
   ##### N_ABEF: N_ABE := N_AB + N_E < m <= N_ABEF, R_{N_ABE+c} = t_{N_ABE+c} ####
-  LR_F <- as.interval(matrix(c(L_F, t_F), ncol = 2, byrow = F))
+  if("case_F" %in% names(case_data_list)) {
+    LR_F <- as.interval(matrix(c(L_F, t_F), ncol = 2, byrow = F))
+  } else {
+    LR_F <- c(NA_real_)
+  }
 
   ##### LR_ABEF: LR_AB ∪ LR_E ∪ LR_F ####
-  LR_ABEF <- as.interval(rbind(LR_AB, LR_E, LR_F))
+  LR_ABEF <- as.interval(na.omit(rbind(LR_AB, LR_E, LR_F)))
   I_union <- get_interval(LR_ABEF)
 
   #### Data manipulation ####
@@ -232,8 +237,11 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     T_CE_star_max = 0
   }
 
-  L_F_max <- max(L_F)
-
+  if("case_F" %in% names(case_data_list)) {
+    L_F_max <- max(L_F)
+  } else {
+    L_F_max <- 0
+  }
   # L_bar ={L_m, 1 <= m <= M'} ∪ {T* ∩ A} ∪ {S_J ∩ A} ∪ {s_max : s_max > R_max ∨ e*_max}
   L_bar <- c(
     L_AB, L_E,
@@ -266,7 +274,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     s_max = C_D_max, R_max = R_max, T_CE_star_max = T_CE_star_max,
 
     # vectors
-    t_D = t_D, L_F = L_F, t_F = t_F, t_C = t_C,
+    t_D = t_D, L_F = L_F, t_F = t_F,
     L_E = L_E, t_E = t_E,
     L_AB = L_AB, R_AB = R_AB,     # then in C++ read x["R_AB"]
     t_AB = t_AB,
