@@ -93,59 +93,89 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
   to_mat <- function(x) if (is.matrix(x)) x else as.matrix(unclass(x))
 
 
-  # check if data has correct columns
-  required_cols <- c("id", "T_obs", "V_healthy", "V_ill", "status_dead", "status_ill")
-  missing_cols <- setdiff(required_cols, names(data))
-  if(length(missing_cols) > 0) {
-    stop(paste("Data is missing required columns:", paste(missing_cols, collapse = ", ")))
-  }
 
-  # Create logical index vectors for each observation type
-  is_ill <- data$status_ill == 1
-  is_dead <- data$status_dead == 1
-  is_T_eq_Vhealthy <- abs(data$T_obs - data$V_healthy) < is_equal_tol
-  is_T_gt_Vhealthy <- abs(data$T_obs - data$V_healthy) > is_equal_tol
+  case_data_list <- create_case_data(data)
+
+
+  N_A <- length(case_data_list$case_A$T_obs)
+  N_B <- length(case_data_list$case_B$T_obs)
+  N_C <- length(case_data_list$case_C$T_obs)
+  N_D <- length(case_data_list$case_D$T_obs)
+  N_E <- length(case_data_list$case_E$T_obs)
+  N_F <- length(case_data_list$case_F$T_obs)
 
   # N_AB observations with interval censored times of 1 → 2 transition:
-  idx_M <- is_ill
-  N_AB <- sum(idx_M)
-  L_AB <- data$V_healthy[idx_M]
-  R_AB <- data$V_ill[idx_M]
-  t_AB <- data$T_obs[idx_M]
+  N_AB <- N_A + N_B
+  if("case_A" %in% names(case_data_list)) {
+    N_A <- length(case_data_list$case_A$T_obs)
+    L_A <- case_data_list$case_A$V_healthy
+    R_A <- case_data_list$case_A$V_ill
+    t_A <- case_data_list$case_A$T_obs
+  } else {
+    N_A <- 0
+    L_A <- c()
+    R_A <- c()
+    t_A <- c()
+  }
+
+  if("case_B" %in% names(case_data_list)) {
+    N_B <- length(case_data_list$case_B$T_obs)
+    L_B <- case_data_list$case_B$V_healthy
+    R_B <- case_data_list$case_B$V_ill
+    t_B <- case_data_list$case_B$T_obs
+  } else {
+    N_B <- 0
+    L_B <- c()
+    R_B <- c()
+    t_B <- c()
+  }
+
+  if("case_C" %in% names(case_data_list)) {
+    N_C <- length(case_data_list$case_C$T_obs)
+    t_C <- case_data_list$case_C$T_obs
+  } else {
+    N_C <- 0
+    t_C <- c()
+  }
+
+  if("case_D" %in% names(case_data_list)) {
+    N_D <- length(case_data_list$case_D$T_obs)
+    t_D <- case_data_list$case_D$T_obs
+  } else {
+    N_D <- 0
+    t_D <- c()
+  }
+
+  if("case_E" %in% names(case_data_list)) {
+    N_E <- length(case_data_list$case_E$T_obs)
+    L_E <- case_data_list$case_E$V_healthy
+    t_E <- case_data_list$case_E$T_obs
+  } else {
+    N_E <- 0
+    L_E <- c()
+    t_E <- c()
+  }
+
+  if("case_F" %in% names(case_data_list)) {
+    N_F <- length(case_data_list$case_F$T_obs)
+    L_F <- case_data_list$case_F$V_healthy
+    t_F <- case_data_list$case_F$T_obs
+  } else {
+    N_F <- 0
+    L_F <- c()
+    t_F <- c()
+  }
+
+
+  N_AB <- N_A + N_B
+  L_AB <- c(L_A, L_B)
+  R_AB <- c(R_A, R_B)
+  t_AB <- c(t_A, t_B)
 
   stopifnot(all(L_AB < R_AB))
-
-  # N_A of N_AB also make a transition to state 3: t_A ⊆ t_AB
-  idx_N_tilde <- is_ill & is_dead
-  N_A <- sum(idx_N_tilde)
-  t_A <- data$T_obs[idx_N_tilde]
-
-  N_B <- N_AB - N_A
   stopifnot(N_A <= N_AB)
 
-  # N_C observations with direct transition 1 → 3, no missing transitions T_obs = V_healthy:
-  idx_K_tilde <- !is_ill & is_dead & is_T_eq_Vhealthy
-  N_C <- sum(idx_K_tilde)
-  t_C <- data$T_obs[idx_K_tilde]
-
-  # N_D observations censored in state 1, no missing transitions T_obs = V_healthy:
-  idx_J <- !is_dead & !is_ill & is_T_eq_Vhealthy
-  N_D <- sum(idx_J)
-  t_D <- data$T_obs[idx_J]
-
-  # N_E observations, last seen in state 1 and then seen in state 3:
-  idx_U <- !is_ill & is_dead & is_T_gt_Vhealthy
-  N_E <- sum(idx_U)
-  L_E <- data$V_healthy[idx_U]
-  t_E <- data$T_obs[idx_U]
-
-  # N_F observations, last seen in state 1 and then censored:
-  idx_C <- !is_ill & !is_dead & is_T_gt_Vhealthy
-  N_F <- sum(idx_C)
-  L_F <- data$V_healthy[idx_C]
-  t_F <- data$T_obs[idx_C]
-
-  t_DF <- c(t_D,t_F)
+  t_DF <- c(t_D, t_F)
 
   ##### N_CE_star: E* - Obs and potential 1 -> 3 ####
   t_CE_star <- unique(c(t_C, t_E))

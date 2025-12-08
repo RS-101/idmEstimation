@@ -19,8 +19,8 @@ create_case_data <- function(obs_data) {
 
   case_A_idx <- which(status_dead == 1 & status_ill == 1) # needs V_healthy, V_ill, T_obs
   case_B_idx <- which(status_dead == 0 & status_ill == 1) # needs V_healthy, V_ill, T_obs
-  case_C_idx <- which(status_dead == 1 & status_ill == 0 & V_healthy == T_obs) # needs T_obs
-  case_D_idx <- which(status_dead == 0 & status_ill == 0 & V_healthy == T_obs) # needs T_obs
+  case_C_idx <- which(status_dead == 1 & status_ill == 0 & abs(V_healthy- T_obs) < 1e-8) # needs T_obs
+  case_D_idx <- which(status_dead == 0 & status_ill == 0 & abs(V_healthy- T_obs) < 1e-8) # needs T_obs
   case_E_idx <- which(status_dead == 1 & status_ill == 0 & V_healthy < T_obs) # needs V_healthy, T_obs
   case_F_idx <- which(status_dead == 0 & status_ill == 0 & V_healthy < T_obs) # needs V_healthy, T_obs
 
