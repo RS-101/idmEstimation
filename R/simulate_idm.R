@@ -968,10 +968,7 @@ create_weibull_hazard <- function(shape12 = 1.5, scale12 = 1,
       F12 = F12,
       F13 = F13,
       P22 = P22
-    ),
-    distribution_functions_1 = list(
-      F12 = Vectorize(function(t){ stats::integrate( function(s) exp(-A12(s)-A13(s))*a12(s), lower = 0, upper = t)$value }),
-      F13 = Vectorize(function(t){ stats::integrate( function(s) exp(-A12(s)-A13(s))*a13(s), lower = 0, upper = t)$value }))
+    )
   )
 
   class(estimators) <- c("idm_estimators", class(estimators))
