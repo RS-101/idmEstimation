@@ -825,26 +825,29 @@ simulate_idm_constant_hazards <- function(
   a12 = 0.0008,
   a13 = 0.0002,
   a23 = 0.0016,
-  average_number_of_visits = 10
+  mean_time_between_visits = 200,
+  sd_time_between_visits = 20,
+  max_right_censoring_time = 10000,
+  prob_censoring_at_last_visit = 0.2
 ) {
-  # Create constant hazard functions
-  a12_const <- function(t) rep(a12, length(t))
-  a13_const <- function(t) rep(a13, length(t))
-  a23_const <- function(s) rep(a23, length(s))
 
-  # Simulate exact data
+  estimators <- create_constant_hazard(a12, a13, a23)
+
   exact_idm <- simulate_exact_idm(
     n = n,
-    a12 = a12_const,
-    a13 = a13_const,
-    a23 = a23_const
+    a12 = estimators$hazard_functions$a12,
+    a13 = estimators$hazard_functions$a13,
+    a23 = estimators$hazard_functions$a23
   )
 
   # Apply censoring and summarize
   result <- simulate_idm(
     exact_idm = exact_idm,
     censoring_fn = add_censoring_type_1,
-    average_number_of_visits = average_number_of_visits
+    mean_time_between_visits,
+    sd_time_between_visits,
+    max_right_censoring_time,
+    prob_censoring_at_last_visit
   )
 
   data <- result$obs
@@ -856,27 +859,11 @@ simulate_idm_constant_hazards <- function(
     a12 = a12,
     a13 = a13,
     a23 = a23,
-    average_number_of_visits = average_number_of_visits
+    mean_time_between_visits = mean_time_between_visits,
+    sd_time_between_visits = sd_time_between_visits,
+    max_right_censoring_time= max_right_censoring_time,
+    prob_censoring_at_last_visit = prob_censoring_at_last_visit
   )
-
-  estimators <- list(
-    hazard_functions = list(
-      a12 = a12_const,
-      a13 = a13_const,
-      a23 = a23_const
-    ),
-    cum_hazard_functions = list(
-      A12 = function(t) a12 * t,
-      A13 = function(t) a13 * t,
-      A23 = function(s) a23 * s
-    ),
-    distribution_functions = list(
-      F12 = function(t) 1 - exp(-a12 * t),
-      F13 = function(t) 1 - exp(-a13 * t),
-      P22 = function(t, entry_time = 0) ifelse(t >= entry_time, exp(-a23 * (t - entry_time)), NA_real_)
-    )
-  )
-  class(estimators) <- c("idm_estimators", class(estimators))
 
   retval <- list(
     data = data,
@@ -918,6 +905,10 @@ create_weibull_hazard <- function(shape12, scale12,
   a12 <- function(t) h_weibull(t, shape12, scale12)
   a13 <- function(t) h_weibull(t, shape13, scale13)
   a23 <- function(t) h_weibull(t, shape23, scale23)
+  A12 = function(t) (t / scale12)^shape12
+  A13 = function(t) (t / scale13)^shape13
+  A23 = function(t) (t / scale23)^shape23
+
   estimators <- list(
     hazard_functions = list(
       a12 = a12,
@@ -925,14 +916,24 @@ create_weibull_hazard <- function(shape12, scale12,
       a23 = a23
     ),
     cum_hazard_functions = list(
-      A12 = function(t) (t / scale12)^shape12,
-      A13 = function(t) (t / scale13)^shape13,
-      A23 = function(t) (t / scale23)^shape23
+      A12 = A12,
+      A13 = A13,
+      A23 = A23
     ),
     distribution_functions = list(
-      F12 = function(t) 1 - exp(-(t / scale12)^shape12),
-      F13 = function(t) 1 - exp(-(t / scale13)^shape13),
-      P22 = function(t, entry_time = 0) ifelse(t >= entry_time, exp(-(t / scale23)^shape23 + (entry_time / scale23)^shape23), NA_real_)
+      F12 = Vectorize(function(t){
+        stats::integrate(
+          function(s) exp(-A12(s)-A13(s))*a12(s),
+          lower = 0, upper = t)$value
+      }),
+      F13 = Vectorize(function(t){
+        stats::integrate(
+          function(s) exp(-A12(s)-A13(s))*a13(s),
+          lower = 0, upper = t)$value
+      }),
+      P22 = function(t, entry_time = 0) {
+        ifelse(t >= entry_time, exp(-A23(t) + A23(entry_time)), NA_real_)
+      }
     )
   )
   class(estimators) <- c("idm_estimators", class(estimators))
@@ -951,26 +952,25 @@ create_weibull_hazard <- function(shape12, scale12,
 #'
 #' @export
 
-create_constant_hazard <- function(a12_const, a13_const, a23_const) {
-  a12 <- function(t) a12_const
-  a13 <- function(t) a13_const
-  a23 <- function(t) a23_const
+create_constant_hazard <- function(a12, a13, a23) {
 
   estimators <- list(
     hazard_functions = list(
-      a12 = a12,
-      a13 = a13,
-      a23 = a23
+      a12 = function(t) rep(a12,length(t)),
+      a13 = function(t) rep(a13,length(t)),
+      a23 = function(t) rep(a23,length(t))
     ),
     cum_hazard_functions = list(
-      A12 = function(t) a12_const * t,
-      A13 = function(t) a13_const * t,
-      A23 = function(t) a23_const * t
+      A12 = function(t) a12 * t,
+      A13 = function(t) a13 * t,
+      A23 = function(t) a23 * t
     ),
     distribution_functions = list(
-      F12 = function(t) 1 - exp(-a12_const * t),
-      F13 = function(t) 1 - exp(-a13_const * t),
-      P22 = function(t, entry_time = 0) ifelse(t >= entry_time, exp(-a23_const * (t - entry_time)), NA_real_)
+      F12 = function(t)
+        a12/(a12+a13)*(1 - exp(-(a12 + a13) * t)),
+      F13 = function(t)
+        a13/(a12+a13)*(1 - exp(-(a12 + a13) * t)),
+      P22 = function(t, entry_time = 0) ifelse(t >= entry_time, exp(-a23 * (t - entry_time)), NA_real_)
     )
   )
   class(estimators) <- c("idm_estimators", class(estimators))
@@ -1040,6 +1040,15 @@ simulate_idm_joly <- function(n) {
     scale23 = scale23
   )
 
+  A12 = function(t) {
+    sapply(t, function(x) {
+      stats::integrate(a12, lower = 0, upper = x,
+                       stop.on.error = TRUE, abs.tol = 1e-8)$value
+    })
+  }
+  A13 = function(t) (t / scale13)^shape13
+  A23 = function(t) (t / scale23)^shape23
+
 
   estimators <- list(
     hazard_functions = list(
@@ -1048,24 +1057,24 @@ simulate_idm_joly <- function(n) {
       a23 = a23
     ),
     cum_hazard_functions = list(
-      A12 = function(t) {
-        sapply(t, function(x) {
-          stats::integrate(a12, lower = 0, upper = x,
-                          stop.on.error = TRUE, abs.tol = 1e-8)$value
-        })
-      },
-      A13 = function(t) (t / scale13)^shape13,
-      A23 = function(t) (t / scale23)^shape23
+      A12 = A12,
+      A13 = A13,
+      A23 = A23
     ),
     distribution_functions = list(
-      F12 = function(t) {
-        sapply(t, function(x) {
-          1 - exp(-stats::integrate(a12, lower = 0, upper = x,
-                                    stop.on.error = TRUE, abs.tol = 1e-8)$value)
-        })
-      },
-      F13 = function(t) 1 - exp(-(t / scale13)^shape13),
-      P22 = function(t, entry_time = 0) ifelse(t >= entry_time, exp(-(t / scale23)^shape23 + (entry_time / scale23)^shape23), NA_real_)
+      F12 = Vectorize(function(t){
+        stats::integrate(
+          function(s) exp(-A12(s)-A13(s))*a12(s),
+          lower = 0, upper = t)$value
+      }),
+      F13 = Vectorize(function(t){
+        stats::integrate(
+          function(s) exp(-A12(s)-A13(s))*a13(s),
+          lower = 0, upper = t)$value
+      }),
+      P22 = function(t, entry_time = 0) {
+        ifelse(t >= entry_time, exp(-A23(t) + A23(entry_time)), NA_real_)
+      }
     )
   )
   class(estimators) <- c("idm_estimators", class(estimators))
@@ -1101,17 +1110,19 @@ simulate_idm_joly <- function(n) {
 #'
 #' @export
 simulate_idm_frydman <- function(n, scenario = 1L) {
-  # Constant hazards as in Frydman paper
-  a12 <- function(x) rep(0.0008, length(x))
-  a23 <- function(x) rep(0.0016, length(x))
-  a13 <- function(x) rep(0.0002, length(x))
+  a12_c <- 0.0008
+  a13_c <- 0.0016
+  a23_c <- 0.0002
+
+
+  estimators <- create_constant_hazard(a12_c,a13_c,a23_c)
 
   # Simulate exact data
   exact_idm <- simulate_exact_idm(
     n = n,
-    a12 = a12,
-    a23 = a23,
-    a13 = a13
+    a12 = estimators$hazard_functions$a12,
+    a13 = estimators$hazard_functions$a13,
+    a23 = estimators$hazard_functions$a23
   )
 
   # Apply Frydman censoring and summarize
@@ -1128,29 +1139,12 @@ simulate_idm_frydman <- function(n, scenario = 1L) {
     observation_scheme = result$cens_mechanism,
     censoring_summary = result$summary,
     scenario = scenario,
-    a12 = 0.0008,
-    a13 = 0.0002,
-    a23 = 0.0016
+    a12 = a12_c,
+    a13 = a13_c,
+    a23 = a23_c
   )
 
-  estimators <- list(
-    hazard_functions = list(
-      a12 = a12,
-      a13 = a13,
-      a23 = a23
-    ),
-    cum_hazard_functions = list(
-      A12 = function(t) 0.0008 * t,
-      A13 = function(t) 0.0002 * t,
-      A23 = function(s) 0.0016 * s
-    ),
-    distribution_functions = list(
-      F12 = function(t) 1 - exp(-0.0008 * t),
-      F13 = function(t) 1 - exp(-0.0002 * t),
-      P22 = function(t, entry_time = 0) ifelse(t >= entry_time, exp(-0.0016 * (t - entry_time)), NA_real_)
-    )
-  )
-  class(estimators) <- c("idm_estimators", class(estimators))
+
 
   retval <- list(
     data = data,

@@ -26,7 +26,7 @@ struct ModelData {
   arma::rowvec r_C;
 
   // --- 2-col interval matrices ---
-  NumericMatrix LR_AB, LR_E, LR_F, LR_ABEF, Q_j;
+  NumericMatrix LR_AB, LR_ABEF, Q_j;
 
   // --- Indicator matrices ---
   LogicalMatrix alpha_ji;  // I_mark x (N_D+N_F), my alpha + beta
@@ -82,20 +82,14 @@ struct ModelData {
     if (Q_j.ncol() != 2) stop("Q_j must have 2 columns");
     if (Q_j.nrow() != I) stop("nrow(Q_j) != I");
 
-    if (LR_AB.ncol() != 2 || LR_E.ncol() != 2 || LR_F.ncol() != 2 || LR_ABEF.ncol() != 2)
+    if (LR_AB.ncol() != 2 || LR_ABEF.ncol() != 2)
       stop("All A_* matrices must have 2 columns");
     if (LR_AB.nrow() != N_AB) stop("nrow(LR_AB) != N_AB");
-    if (LR_E.nrow() != N_E) stop("nrow(LR_E) != N_E");
-    if (LR_F.nrow() != N_F) stop("nrow(LR_F) != N_F");
     if (LR_ABEF.nrow() != N_ABEF) stop("nrow(LR_ABEF) != N_ABEF");
 
     // vectors tied to A_*
     if ((int)L_AB.size() != N_AB || (int)R_AB.size() != N_AB || (int)t_AB.size() != N_AB)
       stop("L_AB, R_m, and t_AB must all have length N_AB");
-    if ((int)L_E.size() != N_E || (int)t_E.size() != N_E)
-      stop("L_E and t_E must have length N_E");
-    if ((int)L_F.size() != N_F || (int)t_F.size() != N_F)
-      stop("L_F and t_F must have length N_F");
 
     // t_AE_star / N_AE_star
     if ((int)t_AE_star.size() != N_AE_star) stop("length(t_AE_star) != N_AE_star");
@@ -163,8 +157,6 @@ struct ModelData {
 
     // matrices (2 columns) — the important part
     LR_AB      = as<NumericMatrix>(x["LR_AB"]);
-    LR_E      = as<NumericMatrix>(x["LR_E"]);
-    LR_F      = as<NumericMatrix>(x["LR_F"]);
     LR_ABEF = as<NumericMatrix>(x["LR_ABEF"]);
     Q_j      = as<NumericMatrix>(x["Q_j"]);
 

@@ -291,7 +291,7 @@ setup_cpp_model <- function(data_object,
   }
   if (!is.null(data_object$case_F)) {
     model_data_list$case_F <- setup_case_F_data(data_object$case_F, model_config)
-  } 
+  }
 
   # return pointer to C++ model data
   create_full_data(model_data_list)
@@ -343,16 +343,18 @@ create_estimators <- function(model_config, theta_hat_list) {
                                   use_bSpline)$i_spline
     as.vector(spline_mat %*% theta_hat_list$theta_23)
   }
-  F12 <- function(x) {
-      1 - exp(-A12(x))
-  }
-  F13 <- function(x) {
-      1 - exp(-A13(x))
-  }
-  P22 <- function(t, entry_time = 10) {
-      ifelse(t >= entry_time,
-            exp(-A23(t) + A23(entry_time)),
-            NA_real_)
+  F12 = Vectorize(function(t){
+    integrate(
+      function(s) exp(-A12(s)-A13(s))*a12(s),
+      lower = 0, upper = t)$value
+  })
+  F13 = Vectorize(function(t){
+    integrate(
+      function(s) exp(-A12(s)-A13(s))*a13(s),
+      lower = 0, upper = t)$value
+  })
+  P22 = function(t, entry_time = 0) {
+    ifelse(t >= entry_time, exp(-A23(t) + A23(entry_time)), NA_real_)
   }
 
   estimators <- list(

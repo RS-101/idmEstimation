@@ -41,7 +41,7 @@
 create_case_data <- function(obs_data) {
 
     # verify data components
-  stopifnot(all(c("V_0", "V_healthy", "V_ill", "T_obs", "status_dead", "status_ill") %in% names(obs_data)))
+  stopifnot(all(c("V_healthy", "V_ill", "T_obs", "status_dead", "status_ill") %in% names(obs_data)))
 
   V_healthy <- obs_data$V_healthy
   V_ill <- obs_data$V_ill

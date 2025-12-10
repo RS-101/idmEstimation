@@ -285,7 +285,7 @@ data_to_list_format <- function(data, is_equal_tol = 1e-8) {
     t_CE_star = t_CE_star,
 
     # 2-col matrices
-    LR_AB = to_mat(LR_AB), LR_E = to_mat(LR_E), LR_F = to_mat(LR_F),
+    LR_AB = to_mat(LR_AB),
     LR_ABEF = to_mat(LR_ABEF), Q_j = to_mat(Q_j)
   )
 
@@ -387,6 +387,15 @@ create_npmle_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
     retval
   }
 
+  F12_imputed <- function(t) {
+    # cumulative sum part: sum z_j for all j with p_j <= t
+    eligeble <- outer(Q_j[, 2], t, FUN = "<=")
+    weighted <- eligeble * matrix(z_j, nrow = I, ncol = length(t), byrow = FALSE)
+    retval   <- colSums(weighted)
+    retval
+  }
+
+
   F12_at_q_j <- F12(Q_j[,1])
 
   A12 <- function(t) {
@@ -454,7 +463,8 @@ create_npmle_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
     distribution_functions = list(
       F12 = F12,
       F13 = F13,
-      P22 = P22
+      P22 = P22,
+      F12_imputed = F12_imputed
     ),
     cum_hazard_functions = list(
       A12 = A12,
