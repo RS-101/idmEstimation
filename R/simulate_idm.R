@@ -893,9 +893,11 @@ simulate_idm_constant_hazards <- function(
 #'
 #' @export
 
-create_weibull_hazard <- function(shape12, scale12,
-                                  shape13, scale13,
-                                  shape23, scale23) {
+create_weibull_hazard <- function(shape12 = 1.5, scale12 = 1,
+                                  shape13 = 1.5, scale13 = 1,
+                                  shape23 = 1.5, scale23 = 1,
+                                  t_max  = NULL,
+                                  n_grid = 3000L) {
   # Weibull hazard: (k/λ) * (t/λ)^(k-1), vectorized and safe at t=0
   h_weibull <- function(t, shape, scale) {
     t <- pmax(as.numeric(t), .Machine$double.eps)
@@ -905,9 +907,51 @@ create_weibull_hazard <- function(shape12, scale12,
   a12 <- function(t) h_weibull(t, shape12, scale12)
   a13 <- function(t) h_weibull(t, shape13, scale13)
   a23 <- function(t) h_weibull(t, shape23, scale23)
-  A12 = function(t) (t / scale12)^shape12
-  A13 = function(t) (t / scale13)^shape13
-  A23 = function(t) (t / scale23)^shape23
+
+  A12 <- function(t) (t / scale12)^shape12
+  A13 <- function(t) (t / scale13)^shape13
+  A23 <- function(t) (t / scale23)^shape23
+
+  ## ---------- Fast F12 and F13 via precomputed cumulative integrals ----------
+
+  # If t_max not supplied, set it to a high quantile of the Weibull distributions
+  if (is.null(t_max)) {
+    t_max <- max(
+      stats::qweibull(0.999, shape = shape12, scale = scale12),
+      stats::qweibull(0.999, shape = shape13, scale = scale13),
+      stats::qweibull(0.999, shape = shape23, scale = scale23)
+    )
+  }
+
+  # Time grid on [0, t_max]
+  t_grid <- seq(0, t_max, length.out = n_grid)
+
+  # Integrands on the grid
+  integrand12 <- exp(-A12(t_grid) - A13(t_grid)) * a12(t_grid)
+  integrand13 <- exp(-A12(t_grid) - A13(t_grid)) * a13(t_grid)
+
+  # Cumulative trapezoidal integration (corrected)
+  dt     <- diff(t_grid)
+  f12_lo <- head(integrand12, -1)
+  f12_hi <- tail(integrand12, -1)
+  f13_lo <- head(integrand13, -1)
+  f13_hi <- tail(integrand13, -1)
+
+  trap12 <- dt * (f12_lo + f12_hi) / 2
+  trap13 <- dt * (f13_lo + f13_hi) / 2
+
+  F12_vals <- c(0, cumsum(trap12))
+  F13_vals <- c(0, cumsum(trap13))
+
+  # Standalone, vectorized approximations of the integrals
+  F12 <- stats::approxfun(t_grid, F12_vals, rule = 2)  # constant extrapolation
+  F13 <- stats::approxfun(t_grid, F13_vals, rule = 2)
+
+  ## ------------------------------ P22 as before ------------------------------
+
+  P22 <- function(t, entry_time = 0) {
+    ifelse(t >= entry_time, exp(-A23(t) + A23(entry_time)), NA_real_)
+  }
 
   estimators <- list(
     hazard_functions = list(
@@ -921,25 +965,18 @@ create_weibull_hazard <- function(shape12, scale12,
       A23 = A23
     ),
     distribution_functions = list(
-      F12 = Vectorize(function(t){
-        stats::integrate(
-          function(s) exp(-A12(s)-A13(s))*a12(s),
-          lower = 0, upper = t)$value
-      }),
-      F13 = Vectorize(function(t){
-        stats::integrate(
-          function(s) exp(-A12(s)-A13(s))*a13(s),
-          lower = 0, upper = t)$value
-      }),
-      P22 = function(t, entry_time = 0) {
-        ifelse(t >= entry_time, exp(-A23(t) + A23(entry_time)), NA_real_)
-      }
-    )
+      F12 = F12,
+      F13 = F13,
+      P22 = P22
+    ),
+    distribution_functions_1 = list(
+      F12 = Vectorize(function(t){ stats::integrate( function(s) exp(-A12(s)-A13(s))*a12(s), lower = 0, upper = t)$value }),
+      F13 = Vectorize(function(t){ stats::integrate( function(s) exp(-A12(s)-A13(s))*a13(s), lower = 0, upper = t)$value }))
   )
+
   class(estimators) <- c("idm_estimators", class(estimators))
   estimators
 }
-
 #' Create constant hazards
 #'
 #' Creates constant hazard functions for the illness-death model.

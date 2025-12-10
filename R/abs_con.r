@@ -343,16 +343,38 @@ create_estimators <- function(model_config, theta_hat_list) {
                                   use_bSpline)$i_spline
     as.vector(spline_mat %*% theta_hat_list$theta_23)
   }
-  F12 = Vectorize(function(t){
-    integrate(
-      function(s) exp(-A12(s)-A13(s))*a12(s),
-      lower = 0, upper = t)$value
-  })
-  F13 = Vectorize(function(t){
-    integrate(
-      function(s) exp(-A12(s)-A13(s))*a13(s),
-      lower = 0, upper = t)$value
-  })
+  # range for approximation grid
+  t_max_12 <- max(model_config$knots_12)
+  t_max_13 <- max(model_config$knots_13)
+  t_max <- max(t_max_12, t_max_13)
+
+  # allow user to override with a larger range if present
+  if (!is.null(model_config$t_max)) {
+    t_max <- max(t_max, model_config$t_max) + 100
+  }
+
+  # number of grid points (can be overridden via model_config$n_grid)
+  n_grid <- if (!is.null(model_config$n_grid)) model_config$n_grid else 2000L
+
+  # time grid
+  t_grid <- seq(0, t_max, length.out = n_grid)
+
+  # integrands on the grid
+  integrand12 <- exp(-A12(t_grid) - A13(t_grid)) * a12(t_grid)
+  integrand13 <- exp(-A12(t_grid) - A13(t_grid)) * a13(t_grid)
+
+  # cumulative trapezoidal integration
+  dt <- diff(t_grid)
+  trap12 <- dt * (head(integrand12, -1) + tail(integrand12, -1)) / 2
+  trap13 <- dt * (head(integrand13, -1) + tail(integrand13, -1)) / 2
+
+  F12_vals <- c(0, cumsum(trap12))
+  F13_vals <- c(0, cumsum(trap13))
+
+  # standalone, vectorized approximations of the integrals
+  F12 <- approxfun(t_grid, F12_vals, rule = 2)  # constant extrapolation
+  F13 <- approxfun(t_grid, F13_vals, rule = 2)
+
   P22 = function(t, entry_time = 0) {
     ifelse(t >= entry_time, exp(-A23(t) + A23(entry_time)), NA_real_)
   }
