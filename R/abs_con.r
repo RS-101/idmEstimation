@@ -2,6 +2,14 @@ library(splines2)
 #### Create spline hazard ####
 make_spline_mat <- function(x, knots, degree, use_bSpline) {
 
+  kn_rn <- range(knots)
+  if (min(x) < kn_rn[1] || max(x) > kn_rn[2]) {
+    warning("evaluation is value outside knot range, hazard set value in closet knot")
+
+    x[x < kn_rn[1]] = kn_rn[1]
+    x[x > kn_rn[2]] = kn_rn[2]
+  }
+
   if(!use_bSpline){
 
     n_knots <- length(knots)
@@ -10,7 +18,7 @@ make_spline_mat <- function(x, knots, degree, use_bSpline) {
       knots = knots[-c(1, n_knots)],
       Boundary.knots = knots[c(1, n_knots)],
       intercept = TRUE,
-      warn.outside = FALSE
+      warn.outside = FALSE,
     )
 
     m_spline_mat <- splines2::mSpline(x,
@@ -18,7 +26,7 @@ make_spline_mat <- function(x, knots, degree, use_bSpline) {
       knots = knots[-c(1, n_knots)],
       Boundary.knots = knots[c(1, n_knots)],
       intercept = TRUE,
-      warn.outside = FALSE
+      warn.outside = FALSE,
     )
 
     spline_mat_list <- list(
@@ -32,7 +40,7 @@ make_spline_mat <- function(x, knots, degree, use_bSpline) {
                                       knots = knots[-c(1, n_knots)],
                                       Boundary.knots = knots[c(1, n_knots)],
                                       intercept = TRUE,
-                                      warn.outside = FALSE,
+                                      warn.outside = TRUE,
                                       integral = T
     )
 
@@ -41,7 +49,7 @@ make_spline_mat <- function(x, knots, degree, use_bSpline) {
                                       knots = knots[-c(1, n_knots)],
                                       Boundary.knots = knots[c(1, n_knots)],
                                       intercept = TRUE,
-                                      warn.outside = FALSE
+                                      warn.outside = TRUE
     )
 
     spline_mat_list <- list(
