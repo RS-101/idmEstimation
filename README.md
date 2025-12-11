@@ -40,10 +40,13 @@ library(idmEstimation)
 set.seed(123)
 sim_data <- simulate_idm_constant_hazards(
   n = 300,
-  a12 = 0.001,  # Healthy → Illness
-  a13 = 0.0005, # Healthy → Death
-  a23 = 0.002,  # Illness → Death
-  average_number_of_visits = 10
+  a12 = 0.0008,
+  a13 = 0.0002,
+  a23 = 0.0016,
+  mean_time_between_visits = 200,
+  sd_time_between_visits = 20,
+  max_right_censoring_time = 10000,
+  prob_censoring_at_last_visit = 0.2
 )
 
 # Examine data structure
