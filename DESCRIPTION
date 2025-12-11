@@ -23,7 +23,7 @@ RoxygenNote: 7.3.3
 Imports: 
     splines2,
     ggplot2,
-    Rcpp (>= 1.1.0)
+    Rcpp (>= 1.1.0),
     numDeriv
 LinkingTo: 
     Rcpp,
