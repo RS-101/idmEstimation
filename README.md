@@ -161,8 +161,7 @@ p$distributions
 - **Multiple censoring mechanisms**: Including Frydman and Joly scenarios from the literature
 - **Efficient C++ backend**: Fast likelihood computation via Rcpp and RcppArmadillo
 - **Automatic smoothing selection**: Cross-validation for penalized splines
-- **Comprehensive visualization**: Compare multiple model fits easily
-- **Handles complex patterns**: Missing transitions, interval censoring, right censoring
+- **Visualization**: Compare multiple model fits easily
 
 ## Getting Help
 
@@ -171,8 +170,11 @@ p$distributions
 - Report issues: [GitHub Issues](https://github.com/RS-101/idmEstimation/issues)
 
 ## References
+
 Frydman and Szarek 2009 Nonparametric estimation in a Markov "illness-death" process from interval censored observations with missing intermediate transition status
+
 Joly et al. 2002 - A penalized likelihood approach for an illness–death model with interval‐censored data: application to age‐specific incidence of dementia
+
 ## License
 
 MIT + file LICENSE
