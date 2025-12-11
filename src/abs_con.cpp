@@ -7,13 +7,6 @@
 #include <limits>
 using namespace Rcpp;
 
-// Penalized and Piecewise constant likelihood calculations for illness-death model
-// Transitions:
-// 1->2: healthy to ill (hazard alpha_12, cumulative hazard A12)
-// 1->3: healthy to death (hazard alpha_13, cumulative hazard A13)
-// 2->3: ill to death (hazard alpha_23, cumulative hazard A23)
-
-// Case-specific data structure
 struct CaseData {
     // ========================================================================
     // REQUIRED FIELDS - Common to all cases
@@ -208,24 +201,12 @@ double calc_case_A_log_likelihood(
     const arma::vec& theta_23
 ) {
 
-    // Case 4: Subject is healthy at V_k (V_healthy), ill at V_{k+1} (V_ill), and dies at T
-    // From image formula (iv):
-    // L = (1/exp(-A01(V_k) - A02(V_k))) *
-    //     ∫_{V_k}^{V_{k+1}} exp(-A01(u) - A02(u)) * α01(u) * exp(-A12(T) - A12(u)) * α12(T) du
-    //
-    // Translating to our notation (01→12, 02→13, 12→23):
-    // L = (1/exp(-A12(V_0) - A13(V_0))) *
-    //     ∫_{V_healthy}^{V_ill} exp(-A12(u) - A13(u)) * α12(u) * exp(-A23(T) - A23(u)) * α23(T) du
-
     // Additional factor: α23(T) * exp(-A23(T))
     arma::vec A23_T_obs = md.T_obs_i_spline_mat_23 * theta_23;
     arma::vec a23_T_obs = md.T_obs_m_spline_mat_23 * theta_23;
     arma::vec exp_neg_A23_T_times_a23 = arma::exp(-A23_T_obs) % a23_T_obs;
 
-    // Compute integrand over grid from V_healthy to V_ill:
-    // exp(-A12(u) - A13(u)) * α12(u) * exp(A23(u) - A23(T)) * α23(T)
-    // Note: α23(T) is constant w.r.t. integration variable u
-
+  
     arma::vec integrand = arma::exp(
         -(md.grid_V_ill_i_spline_mat_12 * theta_12) -
         (md.grid_V_ill_i_spline_mat_13 * theta_13) +
@@ -264,16 +245,7 @@ double calc_case_B_log_likelihood(
     const arma::vec& theta_13,
     const arma::vec& theta_23
 ) {
-    // Case 3: Subject is healthy at V_k (V_healthy), ill at V_{k+1} (V_ill), and still alive at T
-    // From image formula (iii):
-    // L = (1/exp(-A01(V_k) - A02(V_k))) *
-    //     ∫_{V_k}^{V_{k+1}} exp(-A01(u) - A02(u)) * α01(u) * exp(-A12(T) - A12(u)) du
-    //
-    // Translating to our notation (01→12, 02→13, 12→23):
-    // L = (1/exp(-A12(V_0) - A13(V_0))) *
-    //     ∫_{V_healthy}^{V_ill} exp(-A12(u) - A13(u)) * α12(u) * exp(-A23(T) - A23(u)) du
-
- 
+   
     // For the integral, we need exp(-A23(T))
     arma::vec A23_T_obs = md.T_obs_i_spline_mat_23 * theta_23;
     arma::vec exp_neg_A23_T = arma::exp(-A23_T_obs);
