@@ -49,18 +49,22 @@ sim_data <- simulate_idm_constant_hazards(
   prob_censoring_at_last_visit = 0.2
 )
 
-# Examine data structure
-head(sim_data$data)
+# Print summary
+summary(sim_data)   # % missing transition etc.
 
-# Summarize observation patterns
-summary_stats <- summarise_obs_data(sim_data$data)
+# Save summary as list
+summary_stats <- summary(sim_data)
+summary_stats$tables$true_vs_observed
+
+# Observed data
+head(sim_data$data)
 ```
 
 ### Fit Models
 
 ``` r
 # Non-parametric maximum likelihood estimation
-fit_npmle <- fit_npmle(sim_data$data, max_iter = 100, verbose = FALSE)
+fit_npmle <- fit_npmle(sim_data$data, max_iter = 500, verbose = FALSE)
 
 # Piecewise-constant hazard model
 fit_pc <- fit_pc_model(sim_data$data, n_knots = 6)
@@ -70,18 +74,27 @@ fit_spline <- fit_spline_model(
   sim_data$data, 
   degree = 3,
   n_knots = 7,
-  verbose = FALSE
+  verbose = FALSE,
+  run_in_parallel = FALSE # Only tested on debian system.
 )
 ```
 
 ### Visualize Results
 
 ``` r
-# Compare all fitted models with true hazards
-plot(fit_npmle, fit_pc, fit_spline, sim_data)
+# Plot one model alone
+p <- plot_fit(fit_pc, list(entry_time = 100))
+p$hazards
 
-# Plot individual model
-plot(fit_spline)
+
+# Combine with data generating 
+p1 <- plot_fit(fit_pc, sim_data, list(entry_time = 100))
+p1$cumulative_hazards
+
+# Combine all
+p2 <- plot_fit(fit_npmle, fit_spline, fit_pc, sim_data, list(entry_time = 100))
+p2$distributions
+
 ```
 
 ### Extract Estimates
@@ -118,21 +131,28 @@ fit_spline$estimators$distribution_functions$P22(time_points, entry_time = 10)
 ### Custom Hazard Functions
 
 ``` r
-# Simulate with Weibull hazards
-sim_weibull <- simulate_idm_weibull(
-  n = 500,
-  shape12 = 2, scale12 = 10,
-  shape13 = 3, scale13 = 20,
-  shape23 = 1.5, scale23 = 8
-)
 
-# Fit and compare
-fit_weibull_pc <- fit_pc_model(sim_weibull$data, n_knots = 8)
-fit_weibull_spline <- fit_spline_model(
-  sim_weibull$data, 
-  n_knots = 10,
-  verbose = FALSE
-)
+estimators <- create_weibull_hazard()
+
+
+exact_data <- simulate_exact_idm(
+  n = 300,
+  a12 = estimators$hazard_functions$a12,
+  a13 = estimators$hazard_functions$a13,
+  a23 = estimators$hazard_functions$a23,
+  )
+
+censored_data <- add_censoring_type_1(
+  exact_idm = exact_data,
+  mean_time_between_visits = 10,
+  sd_time_between_visits = 2,
+  max_right_censoring_time = 300,
+  prob_censoring_at_last_visit = 0.2
+  )
+
+fit <- fit_pc_model(censored_data$obs)
+p <- plot_fit(fit_pc, list(entry_time = 100))
+p$distributions
 ```
 
 ## Key Features
