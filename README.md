@@ -1,8 +1,5 @@
 # idmEstimation
 
-<!-- badges: start -->
-<!-- badges: end -->
-
 **idmEstimation** provides comprehensive tools for analyzing illness-death models with interval-censored illness times and right-censored death times. The package implements multiple estimation approaches including non-parametric maximum likelihood estimation (NPMLE), piecewise-constant hazards, and penalized spline-based methods.
 
 ## Illness-Death Model
@@ -27,7 +24,7 @@ The package handles complex censoring patterns:
 
 You can install the development version of idmEstimation from GitHub:
 
-``` r
+```r
 # install.packages("devtools")
 devtools::install_github("RS-101/idmEstimation")
 ```
@@ -36,7 +33,7 @@ devtools::install_github("RS-101/idmEstimation")
 
 ### Simulate Data
 
-```{r example-simulate}
+``` r
 library(idmEstimation)
 
 # Simulate illness-death data with constant hazards
@@ -58,7 +55,7 @@ summary_stats <- summarise_obs_data(sim_data$data)
 
 ### Fit Models
 
-```{r example-fit}
+``` r
 # Non-parametric maximum likelihood estimation
 fit_npmle <- fit_npmle(sim_data$data, max_iter = 100, verbose = FALSE)
 
@@ -76,7 +73,7 @@ fit_spline <- fit_spline_model(
 
 ### Visualize Results
 
-```{r example-plot, eval=FALSE}
+``` r
 # Compare all fitted models with true hazards
 plot(fit_npmle, fit_pc, fit_spline, sim_data)
 
@@ -86,7 +83,7 @@ plot(fit_spline)
 
 ### Extract Estimates
 
-```{r example-extract}
+``` r
 # Evaluate hazard functions at specific times
 time_points <- c(5, 10, 20, 30, 40)
 
@@ -117,7 +114,7 @@ fit_spline$estimators$distribution_functions$P22(time_points, entry_time = 10)
 
 ### Custom Hazard Functions
 
-```{r example-custom}
+``` r
 # Simulate with Weibull hazards
 sim_weibull <- simulate_idm_weibull(
   n = 500,
@@ -135,41 +132,6 @@ fit_weibull_spline <- fit_spline_model(
 )
 ```
 
-### Working with Real Data
-
-```{r example-real, eval=FALSE}
-# Load your data
-# Required columns: V_healthy, V_ill, T_obs, status_dead, status_ill
-my_data <- read.csv("my_illness_death_data.csv")
-
-# Summarize observation patterns
-summarise_obs_data(my_data)
-
-# Fit model
-fit <- fit_spline_model(my_data)
-
-# Check convergence
-fit$converged
-
-# Extract smoothing parameters selected by cross-validation
-fit$model_specific$final_kappas
-
-# Visualize
-plot(fit)
-```
-
-## Model Selection
-
-The package provides three estimation approaches:
-
-| Method | Advantages | When to Use |
-|--------|-----------|-------------|
-| **NPMLE** | No parametric assumptions; flexible | Exploratory analysis; irregular hazards |
-| **Piecewise-Constant** | Simple; interpretable | Quick fits; moderate sample sizes |
-| **Penalized Splines** | Smooth curves; automatic tuning | Presentation; large sample sizes; inference |
-
-Use `fit_npmle()` for initial exploration, then `fit_spline_model()` for smooth, publication-ready estimates.
-
 ## Key Features
 
 - **Flexible simulation**: Generate data with arbitrary time-dependent hazards
@@ -186,8 +148,8 @@ Use `fit_npmle()` for initial exploration, then `fit_spline_model()` for smooth,
 - Report issues: [GitHub Issues](https://github.com/RS-101/idmEstimation/issues)
 
 ## References
-Frydman and Szarek 2009
-Joly et al. 2002
+Frydman and Szarek 2009 Nonparametric estimation in a Markov "illness-death" process from interval censored observations with missing intermediate transition status
+Joly et al. 2002 - A penalized likelihood approach for an illness–death model with interval‐censored data: application to age‐specific incidence of dementia
 ## License
 
 MIT + file LICENSE
