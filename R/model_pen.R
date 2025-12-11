@@ -218,11 +218,11 @@ approx_cv <- function(model_config, fit) {
 #' The model maximizes a penalized log-likelihood:
 #' \deqn{\ell(\theta) - \kappa \int [h''(t)]^2 dt}
 #' where \eqn{h(t)} is the hazard function and \eqn{\kappa} controls smoothness.
-#' 
+#'
 #' Larger \eqn{\kappa} produces smoother fits; smaller values allow more flexibility.
 #' The function searches over a grid of \eqn{\kappa} values and selects the one
 #' maximizing an approximate cross-validation criterion.
-#' 
+#'
 #' M-splines are non-negative and integrate to I-splines, making them ideal for
 #' hazard modeling. The penalty is computed via numerical integration of the
 #' second derivative.
@@ -232,7 +232,7 @@ approx_cv <- function(model_config, fit) {
 #' # Simulate data with time-varying hazards
 #' set.seed(567)
 #' sim_data <- simulate_idm_weibull(n = 400, shape12 = 2.5, shape23 = 1.8)
-#' 
+#'
 #' # Fit penalized spline model (may take a minute)
 #' fit_spline <- fit_spline_model(
 #'   sim_data$data,
@@ -240,10 +240,10 @@ approx_cv <- function(model_config, fit) {
 #'   n_knots = 8,
 #'   verbose = FALSE
 #' )
-#' 
+#'
 #' # Check selected smoothing parameters
 #' fit_spline$model_specific$final_kappas
-#' 
+#'
 #' # Plot smooth hazard estimates
 #' plot(fit_spline)
 #' }
@@ -274,19 +274,19 @@ fit_spline_model <- function(data,
   if (is.null(knots_12)) {
     knots_12 <- seq(
       0,
-      summary_data_object$last_possible_12,
+      summary_data_object$last_possible_12 * 1.3,
       length.out = n_knots)
   }
   if (is.null(knots_13)) {
     knots_13 <- seq(
       0,
-      summary_data_object$last_possible_13,
+      max(summary_data_object$last_possible_13) * 1.3,
       length.out = n_knots)
   }
   if (is.null(knots_23)) {
     knots_23 <- seq(
-      summary_data_object$first_possible_23,
-      summary_data_object$last_possible_23, length.out = n_knots)
+      summary_data_object$first_possible_23 * 0.7,
+      summary_data_object$last_possible_23 * 1.3, length.out = n_knots)
   }
 
 
