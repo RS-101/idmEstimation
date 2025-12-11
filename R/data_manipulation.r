@@ -140,10 +140,14 @@ summarise_data_object <- function(data_object) {
   # Last T_obs form C or E
   summary_data_object$last_possible_13 <- if(
       "case_C" %in% names(data_object) ||
-      "case_E" %in% names(data_object)) {
+      "case_D" %in% names(data_object) ||
+      "case_E" %in% names(data_object) ||
+      "case_D" %in% names(data_object)) {
     max(c(
       if ("case_C" %in% names(data_object)) max(data_object$case_C$T_obs, na.rm = TRUE) else -Inf,
-      if ("case_E" %in% names(data_object)) max(data_object$case_E$T_obs, na.rm = TRUE) else -Inf
+      if ("case_D" %in% names(data_object)) max(data_object$case_D$T_obs, na.rm = TRUE) else -Inf,
+      if ("case_E" %in% names(data_object)) max(data_object$case_E$T_obs, na.rm = TRUE) else -Inf,
+      if ("case_F" %in% names(data_object)) max(data_object$case_F$T_obs, na.rm = TRUE) else -Inf
     ), na.rm = TRUE)
   } else {
     NA
