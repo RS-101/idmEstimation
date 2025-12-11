@@ -69,11 +69,13 @@ fit_npmle <- fit_npmle(sim_data$data, max_iter = 500, verbose = FALSE)
 # Piecewise-constant hazard model
 fit_pc <- fit_pc_model(sim_data$data, n_knots = 6)
 
-# Penalized spline model (automatic smoothing selection)
+# Penalized spline model (remove kappa values to run CV)
 fit_spline <- fit_spline_model(
   sim_data$data, 
-  degree = 3,
-  n_knots = 7,
+  n_knots = 4,
+  kappa_12 = 4e15,
+  kappa_13 = 1e11,
+  kappa_23 = 4e15,
   verbose = FALSE,
   run_in_parallel = FALSE # Only tested on debian system.
 )
