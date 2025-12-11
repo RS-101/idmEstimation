@@ -4,17 +4,15 @@
 
 ## Illness-Death Model
 
-The illness-death model is a three-state progressive model commonly used in medical research and survival analysis:
+The illness-death model is three state model commonly used in medical research and survival analysis:
 
-- **State 1 (Healthy)** → **State 2 (Illness)**: transition hazard α₁₂(t)
-- **State 1 (Healthy)** → **State 3 (Death)**: transition hazard α₁₃(t)  
-- **State 2 (Illness)** → **State 3 (Death)**: transition hazard α₂₃(t)
-
-State 3 (Death) is absorbing. Subjects can die directly from State 1 without experiencing illness.
+- **State 1 (Healthy)** → **State 2 (Illness)**
+- **State 1 (Healthy)** → **State 3 (Death)**
+- **State 2 (Illness)** → **State 3 (Death)**
 
 ### Data Structure
 
-The package handles complex censoring patterns:
+The package handles a common censoring patterns:
 
 - **Illness times** are interval-censored (observed between two visits)
 - **Death times** are right-censored
