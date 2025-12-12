@@ -496,7 +496,7 @@ create_npmle_estimators <- function(z_j, lambda_u, Q_j, t_CE_star, t_AE_star) {
 #' @param eval_likelihood Logical. If \code{TRUE}, evaluates and stores likelihood
 #'   at each iteration. Default is \code{FALSE}.
 #' @param use_true_EM Logical. If \code{TRUE}, uses the true EM update; if \code{FALSE},
-#'   uses a stabilized variant. Default is \code{FALSE}.
+#'   uses self-consistency update Default is \code{FALSE}.
 #'
 #' @return An object of class \code{"idm_object"} containing:
 #'   \describe{
