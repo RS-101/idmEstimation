@@ -557,7 +557,7 @@ fit_npmle <- function(data,
 
   z_init <- z_init/sum(z_init)
 
-  lambda_init <- runif(data_list_to_cpp$N_AE_star,min = 0.00001, max = 0.1)
+  lambda_init <- runif(data_list_to_cpp$N_AE_star,min = 0.00001, max = 0.9)
 
   fit <- em_fit(mdl_ptr,
                 z_init = z_init,

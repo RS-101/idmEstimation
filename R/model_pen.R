@@ -100,37 +100,6 @@ max_pen_likelihood <- function(
 
 
 approx_cv <- function(model_config, fit) {
-
-  safe_solve <- function(H_pl, H_ll, ridge_start = 0, tol = 1e-8, max_iter = 8) {
-    # Ensure symmetry (Hessians should be symmetric, but numerics can drift)
-    H <- (H_pl + t(H_pl)) / 2
-
-    # Scale for the ridge so lambda is magnitude-aware
-    sc <- mean(abs(diag(H)))
-    if (!is.finite(sc) || sc == 0) sc <- 1
-
-    # Try Cholesky with increasing ridge
-    lambda <- ridge_start
-    for (i in 0:max_iter) {
-      H_reg <- H + (lambda * sc + .Machine$double.eps) * diag(nrow(H))
-      R <- try(chol(H_reg), silent = TRUE)  # H_reg = t(R) %*% R
-      if (!inherits(R, "try-error")) {
-        # Solve H_reg X = H_ll via two triangular solves (no explicit inverse)
-        Y <- forwardsolve(t(R), H_ll)   # t(R) Y = H_ll
-        X <- backsolve(R, Y)            # R X = Y
-        return(list(X = X, method = "chol", lambda = lambda * sc, iters = i))
-      }
-      lambda <- if (lambda == 0) tol else lambda * 10
-    }
-
-    # Fallback: SVD pseudo-inverse with thresholding
-    sv <- svd(H)
-    thr <- max(tol, max(sv$d) * 1e-12)
-    d_inv <- ifelse(sv$d > thr, 1 / sv$d, 0)
-    X <- sv$v %*% (d_inv * t(sv$u) %*% H_ll)
-    list(X = X, method = "svd", lambda = lambda * sc, rank = sum(sv$d > thr))
-  }
-
   theta_hat_list <- fit$theta_hat_list
   ll_value <- fit$log_likelihood
   pl_value <- fit$penalized_log_likelihood
@@ -173,8 +142,9 @@ approx_cv <- function(model_config, fit) {
   H_pl <- numDeriv::hessian(pl_in_long_theta, long_theta_hat)
   H_ll  <- numDeriv::hessian(ll_in_long_theta, long_theta_hat)
 
-  res <- safe_solve(H_pl, H_ll) # solves H_pl X = H_ll
-  tr_val <- sum(diag(res$X))
+
+  res <- solve(H_pl, H_ll) # solves H_pl X = H_ll
+  tr_val <- sum(diag(res))
 
   approx_cv <- ll_value - tr_val
   approx_cv
